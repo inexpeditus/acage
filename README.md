@@ -182,6 +182,9 @@ If any step fails, the download is discarded.
 
 ## Hardening and networking
 
+What agentcage does and doesn't protect against, and what it trusts, is
+spelled out in [SECURITY.md](SECURITY.md).
+
 **libvirt.** The VM template (`share/domain.xml`) has no shared
 memory (unless you share a folder), no clipboard or guest-agent channel, no
 audio, no USB controller and no VMware backdoor port, and its display doesn't
@@ -278,6 +281,8 @@ home folder and stand-ins for `virsh`, `sudo` and QEMU.
 | `share/image-signing.asc` | Alpine's cloud-image signing key |
 | `tests/` | Test suite (`tests/run`, one `test-*.sh` file per area) |
 | `Makefile` | `install`, `uninstall`, `check`, `test` |
+| `SECURITY.md` | Threat model and how to report vulnerabilities |
+| `CHANGELOG.md` | Changes per release |
 
 ## License
 
