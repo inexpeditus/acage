@@ -17,7 +17,8 @@ LICENSES = $(DESTDIR)$(PREFIX)/share/licenses/agentcage
 
 LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/cloudinit.sh lib/image.sh \
        lib/provision.sh lib/push.sh lib/backend-libvirt.sh lib/backend-qemu.sh
-DATAFILES = share/domain.xml share/image-signing.asc share/firewall.nft
+DATAFILES = share/domain.xml share/image-signing.asc share/firewall.nft \
+            share/motd.agent share/motd.user
 
 .PHONY: all install uninstall check test
 

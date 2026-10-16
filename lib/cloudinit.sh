@@ -69,6 +69,27 @@ EOF
   for h in $(harness_list); do harness_profile_lines "$h" | sed 's/^/      /'; done
   # Per-user settings such as API keys (written later, mode 600).
   echo '      [ -r "$HOME/.config/agentcage/env" ] && . "$HOME/.config/agentcage/env"'
+  # Login message for interactive logins, depending on the account.
+  cat <<'EOF'
+      case $- in *i*)
+        if [ "$(id -un)" = agent ]; then cat /etc/agentcage/motd.agent; else cat /etc/agentcage/motd.user; fi 2>/dev/null ;;
+      esac
+EOF
+  # The messages themselves (base64, so any text survives YAML), and an empty
+  # /etc/motd so Alpine's default greeting doesn't show as well.
+  cat <<EOF
+  - path: /etc/agentcage/motd.agent
+    permissions: "0644"
+    encoding: b64
+    content: $(base64 -w0 "$DATA_DIR/motd.agent")
+  - path: /etc/agentcage/motd.user
+    permissions: "0644"
+    encoding: b64
+    content: $(base64 -w0 "$DATA_DIR/motd.user")
+  - path: /etc/motd
+    permissions: "0644"
+    content: ""
+EOF
   # Root access for you: a rule appended to /etc/doas.conf itself (not
   # /etc/doas.d), deferred until after the doas package is installed so apk
   # doesn't replace it. With a password, doas asks for it ('persist' caches
