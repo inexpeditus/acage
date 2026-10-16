@@ -43,15 +43,16 @@ image_accept() {
 image_dry_run_note() { echo "(dry-run) would verify the signature and install the image at $1"; }
 
 # Public key that will be authorized for the guest user (generated if missing).
+# Callers capture stdout as the path, so all messages here go to stderr.
 image_pubkey_file() {
   local pub=${SSH_PUBKEY:-$HOME/.ssh/id_agentbox.pub}
   if [ ! -f "$pub" ] && [ -z "$SSH_PUBKEY" ]; then
     if dry; then
-      run ssh-keygen -t ed25519 -f "${pub%.pub}" -C "$VM" -N ""
+      run ssh-keygen -t ed25519 -f "${pub%.pub}" -C "$VM" -N "" >&2
     else
       mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
       ssh-keygen -t ed25519 -f "${pub%.pub}" -C "$VM" -N "" >/dev/null
-      log "Generated SSH key ${pub%.pub}"
+      log "Generated SSH key ${pub%.pub}" >&2
     fi
   fi
   echo "$pub"
