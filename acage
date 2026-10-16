@@ -23,7 +23,7 @@ else
   LIB_DIR=$DIR/../lib/agentcage; DATA_DIR=$DIR/../share/agentcage
 fi
 
-for f in common pool alpine harness share cloudinit image provision; do
+for f in common pool alpine harness share cloudinit image provision push; do
   # shellcheck source=/dev/null
   . "$LIB_DIR/$f.sh"
 done
@@ -50,6 +50,8 @@ BACKEND=${AGENTCAGE_BACKEND:-libvirt}
 NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; PW_SET=0; POOL_SET=0
 HARNESS_SET=0; SHARE_SET=0; LAN_SET=0
 SSH_ARGS=()
+PUSH_PATHS=()
+PUSH_TO=.
 
 usage() {
   cat <<EOF
@@ -60,6 +62,7 @@ Commands:
   image            Download and verify the latest Alpine cloud image only
   create           Create and boot a VM from the downloaded image
   attach NAME      Log in to a VM, asking whether as the agent or as you
+  push NAME PATH...  Copy files or folders from here into the agent's home
   ssh NAME [-- CMD]  Run CMD in a VM (as the agent unless --user)
   start NAME       Start a stopped VM
   stop NAME        Shut a VM down
@@ -91,9 +94,10 @@ Options for install/create:
                     created if missing)
   --no-wait         Start the VM and return, without waiting for first boot
 
-Options for attach/ssh:
+Options for attach/ssh/push:
   --agent, --user   Log in as the agent (ssh's default) or as you, without
-                    being asked
+                    being asked; push copies into that account's home
+  --to DIR          push: copy into DIR (inside the home) instead of the home
 
 General options:
   --backend NAME    libvirt (default), or qemu to run QEMU directly
@@ -121,10 +125,11 @@ while [ $# -gt 0 ]; do
     --user)
       # A flag for attach/ssh, a name for create/install.
       case "$cmd" in
-        attach|ssh) WHO=user; shift ;;
+        attach|ssh|push) WHO=user; shift ;;
         *) need_value "$@"; GUEST_USER=$2; USER_SET=1; shift 2 ;;
       esac ;;
     --agent) WHO=agent; shift ;;
+    --to) need_value "$@"; PUSH_TO=$2; shift 2 ;;
     --allow-lan) ALLOW_LAN=1; LAN_SET=1; shift ;;
     --harness) need_value "$@"; HARNESS=$2; HARNESS_SET=1; shift 2 ;;
     --share) need_value "$@"; SHARE_DIR=$2; SHARE_SET=1; shift 2 ;;
@@ -147,6 +152,7 @@ while [ $# -gt 0 ]; do
     *)
       if [ -z "$cmd" ]; then cmd=$1
       elif [ "$NAME_SET" = 0 ]; then VM=$1; NAME_SET=1
+      elif [ "$cmd" = push ]; then PUSH_PATHS+=("$1")
       else die "Unexpected argument: $1"
       fi
       shift ;;
@@ -273,6 +279,14 @@ cmd_ssh() {
   exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
 }
 
+cmd_push() {
+  local user=$AGENT_USER
+  [ ${#PUSH_PATHS[@]} -gt 0 ] || die "What should be copied? acage push $VM PATH..."
+  backend_locate "$VM"
+  [ "$WHO" != user ] || user=$(vm_user "$VM")
+  push_paths "$VM" "$user" "$PUSH_TO" "${PUSH_PATHS[@]}"
+}
+
 cmd_attach() {
   backend_locate "$VM"
   attach "$VM" "$WHO"
@@ -338,6 +352,7 @@ case "$cmd" in
     [ "$cmd" = create ] || cmd_image
     cmd_create ;;
   attach) need_name; cmd_attach ;;
+  push) need_name; cmd_push ;;
   ssh) need_name; cmd_ssh ;;
   start) need_name; backend_start "$VM" ;;
   stop) need_name; backend_stop "$VM" ;;

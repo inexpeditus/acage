@@ -61,7 +61,8 @@ Alpine's GPG signature, with the signing key pinned by fingerprint in
 - Don't run code the agent wrote from your own account in the VM, least of
   all with `doas`. Use `--no-doas` if you don't need root there, especially
   with a shared folder on libvirt.
-- Move code with Git instead of a shared folder, and give the VM a
+- Move files in with `acage push` instead of a shared folder, and get the
+  agent's work back through Git, reviewing it before you pull. Give the VM a
   read-only deploy key unless it must push.
 - Use API keys that are limited to this purpose and have spending limits.
 - Keep the default firewall. If the agent doesn't need the internet either,

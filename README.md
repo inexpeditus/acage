@@ -101,6 +101,7 @@ steps.
 | `image` | Download the latest Alpine cloud image and verify it |
 | `create [NAME]` | Create and boot a VM from the downloaded image |
 | `attach NAME` | Log in, choosing the `agent` account or yours (`--agent` / `--user` to skip the question) |
+| `push NAME PATH...` | Copy files or folders from your computer into the agent's home ([details](#moving-files-into-a-vm)) |
 | `ssh NAME [-- CMD]` | Run `CMD` in a VM, as `agent` (or as you with `--user`) |
 | `start NAME` / `stop NAME` | Start or shut down a VM |
 | `console NAME` | Serial console (libvirt) or boot output (`--backend qemu`) |
@@ -159,6 +160,28 @@ doas apk add neovim
 
 SSH login is key-only for both accounts, and direct root login is disabled.
 
+## Moving files into a VM
+
+```bash
+acage push mybox ~/projects/app notes.md          # into the agent's home
+acage push mybox ~/projects/app --to work         # into ~/work
+acage push mybox setup.sh --user                  # into your account instead
+```
+
+This is the safest way to get files into a VM. Your computer starts the
+copy, data only flows into the VM, and it goes over the SSH connection acage
+already uses, so there's no shared folder, no extra service, and the firewall
+stays closed. Symlinks are copied as symlinks and never followed, so a link
+can't pull in files from elsewhere on your computer.
+
+Everything you push is readable by the agent. `push` refuses your home folder
+and credential folders (`~/.ssh`, `~/.aws` and the like), and warns when what
+you're pushing contains files that look like secrets (`.env`, private keys).
+
+There's deliberately no way to copy files out of a VM. To get the agent's work
+back, have it push to a Git remote with its deploy key, and review the
+changes before you pull them.
+
 ## Shared folder
 
 `--share DIR` makes `DIR` on your computer appear as `~/shared` in the VM,
@@ -190,8 +213,8 @@ VM (`--yes` skips the question). It refuses to share `/`, your home folder
 (or anything containing it), and credential folders such as `~/.ssh`,
 `~/.gnupg`, `~/.aws` and `~/.kube`.
 
-The safer way to move code in and out is Git: give the VM a deploy key and
-push and pull through a remote.
+The safer way to move files is [`acage push`](#moving-files-into-a-vm) to
+get them in, and Git (with review) to get the agent's work back out.
 
 ## Image verification
 

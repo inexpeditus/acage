@@ -76,7 +76,7 @@ load_libs() {
   RAM_MB=2048 VCPUS=2 DISK_GB=10 SSH_PUBKEY="" DRY_RUN=0 ASSUME_YES=0
   BACKEND=${1:-libvirt} DATA_DIR=$ROOT/share POOL_DIR=$POOL
   local f
-  for f in common pool alpine harness share cloudinit image provision "backend-$BACKEND"; do
+  for f in common pool alpine harness share cloudinit image provision push "backend-$BACKEND"; do
     # shellcheck source=/dev/null
     . "$ROOT/lib/$f.sh"
   done

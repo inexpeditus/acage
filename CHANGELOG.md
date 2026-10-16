@@ -29,6 +29,8 @@ First release, planned as 0.1.0.
 - Free-space checks before anything is created, a 5 GB reserve on the root
   filesystem, and a remembered pool folder that defaults to
   `/home/agentcage` when `/` is the smaller partition.
+- `acage push` copies files and folders into a VM over SSH, refusing the
+  home folder and credential folders and warning about likely secrets.
 - Generated `~/.ssh/config` entries. `delete` lists what it will remove, asks
   first, and cleans up the VM, its SSH entry and host key, its settings, and
   (only on an explicit yes) a shared folder acage created.

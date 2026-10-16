@@ -30,6 +30,12 @@
 .Ar name
 .Op Fl -agent | Fl -user
 .Nm
+.Cm push
+.Ar name
+.Ar path ...
+.Op Fl -agent | Fl -user
+.Op Fl -to Ar dir
+.Nm
 .Cm ssh
 .Ar name
 .Op Fl -agent | Fl -user
@@ -99,6 +105,21 @@ or as the invoking user's account, unless
 or
 .Fl -user
 is given.
+.It Cm push Ar name Ar path ...
+Copy files and directories from the host into the home directory of
+.Ql agent ,
+or of the invoking user's account with
+.Fl -user ,
+or into
+.Ar dir
+inside it with
+.Fl -to .
+The host starts the copy and data only flows into the machine, over SSH.
+Symbolic links are copied as links, not followed.
+The home directory and credential directories such as
+.Pa ~/.ssh
+are refused, and files that look like secrets are warned about.
+There is no command to copy files out of a machine.
 .It Cm ssh Ar name Op Fl - Ar command ...
 Log in as
 .Ql agent ,
@@ -148,7 +169,8 @@ The options are as follows:
 .Bl -tag -width Ds
 .It Fl -agent , Fl -user
 With
-.Cm attach
+.Cm attach ,
+.Cm push
 and
 .Cm ssh :
 log in as
@@ -157,6 +179,12 @@ or as the invoking user's account.
 .It Fl -allow-lan
 Leave the firewall out, so the machine can reach the local network and the
 host.
+.It Fl -to Ar dir
+With
+.Cm push :
+copy into
+.Ar dir ,
+relative to the home directory, instead of the home directory itself.
 .It Fl -backend Ar backend
 .Cm libvirt
 .Pq the default
@@ -304,6 +332,10 @@ Create a machine with Claude Code and connect to it:
 .Pp
 .Dl $ acage install mybox --harness claude-code
 .Dl $ acage attach mybox
+.Pp
+Give the agent a project to work on:
+.Pp
+.Dl $ acage push mybox ~/projects/app
 .Pp
 Install a package as yourself, since the agent has no root:
 .Pp
