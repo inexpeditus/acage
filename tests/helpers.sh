@@ -45,6 +45,16 @@ acage_run() {
   OUT=$(printf '%s' "$OUT" | sed 's/\x1b\[[0-9;]*m//g')
 }
 
+# acage_tty INPUT ARGS... -> like acage_run, but in a pseudo-terminal fed with
+# INPUT (one answer per line), so the interactive questions are asked.
+acage_tty() {
+  local input=$1 cmd q; shift
+  cmd=$(printf '%q ' "$ROOT/acage" "$@")
+  RC=0
+  OUT=$(printf '%b' "$input" | script -qec "$cmd" /dev/null 2>&1) || RC=$?
+  OUT=$(printf '%s' "$OUT" | sed 's/\x1b\[[0-9;]*m//g' | tr -d '\r')
+}
+
 assert_rc() { [ "$RC" = "$1" ] || fail "exit status $RC, expected $1. Output:
 $OUT"; }
 assert_out() { [[ "$OUT" == *"$1"* ]] || fail "expected '$1' in output:
@@ -62,7 +72,7 @@ assert_fails() {
 
 # load_libs [BACKEND] -> sources lib/ with the defaults acage would set.
 load_libs() {
-  VM=box GUEST_USER=roy GUEST_DOAS=1 GUEST_PW_HASH="" HARNESS=pi SHARE_DIR="" ALLOW_LAN=0 WHO=""
+  VM=box GUEST_USER=roy GUEST_DOAS=1 GUEST_PW_HASH="" HARNESS=pi SHARE_DIR="" SHARE_CREATED=0 ALLOW_LAN=0 WHO=""
   RAM_MB=2048 VCPUS=2 DISK_GB=10 SSH_PUBKEY="" DRY_RUN=0 ASSUME_YES=0
   BACKEND=${1:-libvirt} DATA_DIR=$ROOT/share POOL_DIR=$POOL
   local f

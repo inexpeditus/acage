@@ -39,6 +39,7 @@ GUEST_PW_HASH=""
 ASK_PW=0
 HARNESS=pi
 SHARE_DIR=""
+SHARE_CREATED=0
 ALLOW_LAN=0
 WHO=""
 SSH_PUBKEY=""
@@ -234,9 +235,16 @@ cmd_create() {
     interactive || die "--password needs a terminal to type the password in"
     ask_password GUEST_PW_HASH "Password for '$GUEST_USER' in the VM"
   fi
-  [ -f "$HOME/.ssh/known_hosts" ] && run ssh-keygen -R "$VM" >/dev/null 2>&1 || true
+  # -f: ssh-keygen otherwise edits the login user's file, whatever HOME says.
+  [ -f "$HOME/.ssh/known_hosts" ] && run ssh-keygen -R "$VM" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
 
   backend_create "$VM"
+  # Remembered so 'acage attach' knows your account and 'acage delete' the share.
+  if ! dry; then
+    config_set "user_$VM" "$GUEST_USER"
+    [ -z "$SHARE_DIR" ] || config_set "share_$VM" "$SHARE_DIR"
+    [ "$SHARE_CREATED" != 1 ] || config_set "share_created_$VM" 1
+  fi
 
   if dry; then
     echo "(dry-run) would then wait for first boot, add an SSH config entry, and offer" >&2
@@ -270,19 +278,43 @@ cmd_attach() {
   attach "$VM" "$WHO"
 }
 
+# Deletes a VM and everything acage set up for it on this computer. Also
+# cleans up after a create that failed half-way, when only settings are left.
 cmd_delete() {
-  backend_exists "$VM" || die "No VM named '$VM'"
+  local exists=1 share created
+  backend_exists "$VM" || exists=0
+  share=$(config_get "share_$VM")
+  created=$(config_get "share_created_$VM")
+  if [ "$exists" = 0 ] && ! grep -qxF "$(ssh_marker_begin "$VM")" "$HOME/.ssh/config" 2>/dev/null \
+       && [ -z "$(config_get "user_$VM")$share" ]; then
+    die "No VM named '$VM'"
+  fi
+  {
+    if [ "$exists" = 1 ]; then
+      echo "This deletes '$VM':"
+      echo "  - the VM, its disk and its first-boot config"
+    else
+      echo "There's no VM named '$VM' any more, but these are left over and will be removed:"
+    fi
+    echo "  - its 'Host $VM' entry in ~/.ssh/config and its host key in ~/.ssh/known_hosts"
+    echo "  - acage's saved settings for it"
+    [ -z "$share" ] || echo "Its shared folder $share is not part of this; you'll be asked about it separately."
+    echo "Your SSH key, the downloaded Alpine image and other VMs are kept."
+  } >&2
   if [ "$ASSUME_YES" != 1 ]; then
     interactive || die "Deleting needs confirmation: run interactively or add --yes"
-    yesno "Delete VM '$VM' and its disk? This cannot be undone." n || die "Not deleted"
+    yesno "Are you sure? This can't be undone." n || die "Nothing was deleted"
   fi
-  backend_delete "$VM"
+  [ "$exists" = 0 ] || backend_delete "$VM"
   if ! dry; then
     remove_ssh_config_entry "$VM"
+    [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$VM" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
     config_unset "user_$VM"
-    [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$VM" >/dev/null 2>&1 || true
+    config_unset "share_$VM"
+    config_unset "share_created_$VM"
   fi
   log "Deleted $VM"
+  [ -z "$share" ] || share_offer_delete "$share" "$created"
 }
 
 need_name() { [ "$NAME_SET" = 1 ] || die "Which VM? acage $cmd NAME"; check_name; }

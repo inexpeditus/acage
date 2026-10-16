@@ -122,7 +122,16 @@ List the machines
 .Nm
 created.
 .It Cm delete Ar name
-Delete a machine, its disk and its SSH configuration entry.
+List what will be removed and, after confirmation, delete the machine, its
+disk, its SSH configuration entry and host key, and the settings saved for
+it.
+A shared directory that
+.Nm
+created is offered for deletion separately, defaulting to no; one that
+existed before is kept, and
+.Fl y
+never deletes it.
+Leftovers of a machine whose creation failed are cleaned up too.
 Machines
 .Nm
 did not create are refused.

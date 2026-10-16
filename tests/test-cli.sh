@@ -107,6 +107,41 @@ fake_qemu_vm() {
   printf 'C_RAM_MB=2048\nC_VCPUS=2\nC_SSH_PORT=2222\nC_SHARE_DIR=\n' >"$POOL/vms/$1/config"
 }
 
+test_delete_asks_and_can_be_declined() {
+  have script || return 0
+  fake_qemu_vm box
+  acage_tty 'n\n' delete box --backend qemu --pool-dir "$POOL"
+  assert_rc 1; assert_out "Are you sure?"; assert_out "Nothing was deleted"
+  [ -d "$POOL/vms/box" ] || fail "deleted after answering no"
+}
+
+test_delete_offers_the_shared_folder_only_if_acage_made_it() {
+  have script || return 0
+  mkdir -p "$XDG_CONFIG_HOME/agentcage" "$TMP/made" "$TMP/mine"
+  touch "$TMP/made/a" "$TMP/mine/b"
+  fake_qemu_vm box; fake_qemu_vm box2
+  printf 'share_box=%s\nshare_created_box=1\nshare_box2=%s\n' "$TMP/made" "$TMP/mine" >"$XDG_CONFIG_HOME/agentcage/config"
+  acage_tty 'y\ny\n' delete box --backend qemu --pool-dir "$POOL"
+  assert_rc 0; assert_out "Also delete the shared folder $TMP/made"; assert_out "Deleted the shared folder"
+  [ ! -e "$TMP/made" ] || fail "shared folder not deleted after yes"
+  # A folder that existed before the VM is never offered.
+  acage_tty 'y\ny\n' delete box2 --backend qemu --pool-dir "$POOL"
+  assert_rc 0; assert_not_out "Also delete the shared folder"; assert_out "Kept the shared folder $TMP/mine"
+  [ -f "$TMP/mine/b" ] || fail "deleted a folder acage didn't make"
+}
+
+test_delete_cleans_leftovers_of_a_failed_create() {
+  mkdir -p "$HOME/.ssh" "$XDG_CONFIG_HOME/agentcage"
+  printf '# agentcage:begin ghost\nHost ghost\n# agentcage:end ghost\n' >"$HOME/.ssh/config"
+  printf 'user_ghost=roy\n' >"$XDG_CONFIG_HOME/agentcage/config"
+  acage_run delete ghost --backend qemu --pool-dir "$POOL" -y
+  assert_rc 0; assert_out "left over"; assert_out "Deleted ghost"
+  [ ! -s "$HOME/.ssh/config" ] || fail "leftover SSH entry kept: $(cat "$HOME/.ssh/config")"
+  [ ! -s "$XDG_CONFIG_HOME/agentcage/config" ] || fail "leftover settings kept"
+  acage_run delete ghost --backend qemu --pool-dir "$POOL" -y
+  assert_rc 1; assert_out "No VM named 'ghost'"
+}
+
 test_list_shows_qemu_vms() {
   fake_qemu_vm box
   acage_run list --backend qemu --pool-dir "$POOL"
@@ -125,10 +160,19 @@ test_delete_needs_confirmation_then_cleans_up() {
   [ -d "$POOL/vms/box" ] || fail "VM was deleted without confirmation"
 
   mkdir -p "$XDG_CONFIG_HOME/agentcage"
-  printf 'user_box=roy\nuser_other=x\n' >"$XDG_CONFIG_HOME/agentcage/config"
+  printf 'user_box=roy\nshare_box=%s\nshare_created_box=1\nuser_other=x\n' "$TMP/share" >"$XDG_CONFIG_HOME/agentcage/config"
+  mkdir "$TMP/share"; touch "$TMP/share/work.txt"
+  printf 'box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIbox\nother ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIoth\n' >"$HOME/.ssh/known_hosts"
   acage_run delete box --backend qemu --pool-dir "$POOL" -y
-  assert_rc 0; assert_out "Deleted box"
+  assert_rc 0
+  assert_out "This deletes 'box'"
+  assert_out "Deleted box"
   assert_eq "$(cat "$XDG_CONFIG_HOME/agentcage/config")" "user_other=x"
+  grep -q '^box ' "$HOME/.ssh/known_hosts" && fail "host key of box still in known_hosts"
+  grep -q '^other ' "$HOME/.ssh/known_hosts" || fail "removed another host's key"
+  # --yes never deletes the shared folder.
+  assert_out "Kept the shared folder $TMP/share (1 files and folders)"
+  [ -f "$TMP/share/work.txt" ] || fail "shared folder deleted with --yes"
   [ ! -e "$POOL/vms/box" ] || fail "VM folder still there"
   cmp -s "$HOME/.ssh/config" "$TMP/config.orig" || fail "SSH config not restored: $(cat "$HOME/.ssh/config")"
 }

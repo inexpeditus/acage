@@ -105,7 +105,7 @@ steps.
 | `start NAME` / `stop NAME` | Start or shut down a VM |
 | `console NAME` | Serial console (libvirt) or boot output (`--backend qemu`) |
 | `list` | List the VMs agentcage created |
-| `delete NAME` | Delete a VM, its disk and its SSH config entry |
+| `delete NAME` | Delete a VM and everything acage set up for it ([details](#deleting-a-vm)) |
 
 Run `image` again whenever you want a newer Alpine release. VMs you've
 already created aren't affected.
@@ -275,6 +275,27 @@ folder can't be inside your home folder, because VMs run as a separate system
 user that can't enter it. A folder such as `/home/agentcage` works. On
 Fedora and other SELinux systems, label a folder outside
 `/var/lib/libvirt/images` first (acage prints the command).
+
+## Deleting a VM
+
+`acage delete NAME` lists what it will remove and asks before doing anything:
+
+```
+This deletes 'mybox':
+  - the VM, its disk and its first-boot config
+  - its 'Host mybox' entry in ~/.ssh/config and its host key in ~/.ssh/known_hosts
+  - acage's saved settings for it
+Your SSH key, the downloaded Alpine image and other VMs are kept.
+Are you sure? This can't be undone. [y/N]
+```
+
+If acage created the VM's shared folder, it then asks separately whether to
+delete that too, defaulting to no: the folder is on your computer and may hold
+your work. A folder you pointed `--share` at yourself is never offered, and
+`--yes` never deletes a shared folder.
+
+`delete` also cleans up after a create that failed half-way, when only the SSH
+entry or settings are left.
 
 ## Troubleshooting
 

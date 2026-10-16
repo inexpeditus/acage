@@ -18,9 +18,36 @@ share_create() {
     yesno "'$d' doesn't exist. Create it?" y || die "Not sharing; nothing was created"
   fi
   if dry; then run mkdir -p "$d"; return 0; fi
+  SHARE_CREATED=1
   mkdir -p "$d" 2>/dev/null && return 0
   log "Creating $d (needs sudo)"
   sudo mkdir -p "$d" && sudo chown "$(id -u):$(id -g)" "$d" || die "Could not create $d"
+}
+
+# share_offer_delete DIR CREATED -> after a VM is deleted, offers to delete its
+# shared folder. Only folders acage created are offered, only interactively,
+# and the answer defaults to no: the folder is on your computer and may hold
+# your work. --yes never deletes it.
+share_offer_delete() {
+  local dir=$1 created=$2 n parent
+  [ -d "$dir" ] || return 0
+  n=$(find "$dir" -mindepth 1 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$created" != 1 ] || [ "$ASSUME_YES" = 1 ] || ! interactive || dry; then
+    log "Kept the shared folder $dir ($n files and folders)"
+    return 0
+  fi
+  if ! yesno "Also delete the shared folder $dir? It's on your computer and holds $n files and folders" n; then
+    log "Kept the shared folder $dir"
+    return 0
+  fi
+  # Files root created in the VM (libvirt) are owned by root on the host too.
+  rm -rf "$dir" 2>/dev/null || { warn "Some files in $dir belong to root; using sudo"; sudo rm -rf "$dir"; } \
+    || { warn "Could not delete $dir"; return 0; }
+  log "Deleted the shared folder $dir"
+  parent=$(dirname "$dir")
+  if [ "$parent" = /mnt/acage-shared ] && [ -z "$(ls -A "$parent" 2>/dev/null)" ]; then
+    rmdir "$parent" 2>/dev/null || sudo rmdir "$parent" 2>/dev/null || true
+  fi
 }
 
 # share_resolve -> turns SHARE_DIR into an absolute, symlink-free path and

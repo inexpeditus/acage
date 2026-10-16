@@ -183,7 +183,6 @@ provision_vm() {
   [ "$rc" != 1 ] || warn "First-boot setup failed; look at /var/log/cloud-init-output.log in the VM."
 
   write_ssh_config_entry "$vm"
-  config_set "user_$vm" "$user"
 
   # First connection that records a host key: by now cloud-init (and any host-key
   # regeneration it does) has finished, so the key is final.

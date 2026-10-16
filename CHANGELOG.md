@@ -29,6 +29,8 @@ First release, planned as 0.1.0.
 - Free-space checks before anything is created, a 5 GB reserve on the root
   filesystem, and a remembered pool folder that defaults to
   `/home/agentcage` when `/` is the smaller partition.
-- Generated `~/.ssh/config` entries, removed again by `delete`.
+- Generated `~/.ssh/config` entries. `delete` lists what it will remove, asks
+  first, and cleans up the VM, its SSH entry and host key, its settings, and
+  (only on an explicit yes) a shared folder acage created.
 - `make install` / `uninstall`, the `acage(1)` man page, a test suite
   (`make test`) and CI.

@@ -209,6 +209,7 @@ backend_delete() {
   if pid=$(qemu_pid "$1"); then run kill "$pid"; fi
   run rm -rf "$(vm_dir "$1")"
   run rm -f "$(qemu_sock_dir)/$1".{console,monitor}
+  dry || rmdir "$(qemu_sock_dir)" 2>/dev/null || true
 }
 
 backend_list() {
