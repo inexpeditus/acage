@@ -9,6 +9,7 @@
 .Cm install | create
 .Op Ar name
 .Op Fl ny
+.Op Fl -allow-lan
 .Op Fl -backend Ar backend
 .Op Fl -disk Ar GB
 .Op Fl -harness Ar list
@@ -55,7 +56,8 @@ other's home directory.
 The machine also installs
 .Xr git 1 ,
 .Xr vim 1 ,
-Node.js and the chosen agent harnesses.
+Node.js and the chosen agent harnesses, and starts a firewall that lets it
+reach the internet but not the local network or the host.
 Nothing from the host is shared with the machine unless
 .Fl -share
 is given.
@@ -143,6 +145,9 @@ and
 log in as
 .Ql agent
 or as the invoking user's account.
+.It Fl -allow-lan
+Leave the firewall out, so the machine can reach the local network and the
+host.
 .It Fl -backend Ar backend
 .Cm libvirt
 .Pq the default
@@ -309,11 +314,16 @@ See what a machine would look like without changing anything:
 .Xr doas.conf 5 ,
 .Xr ssh_config 5
 .Sh SECURITY CONSIDERATIONS
-The machine can reach the network: the internet, the local network, and
-services on the host's libvirt bridge address, or with
+The machine can reach the internet, so an agent can send anything it can
+read inside the machine there.
+The firewall that keeps it off the local network and the host runs inside the
+machine: the agent cannot change it, but anything that gains root in the
+machine can.
+With
+.Fl -allow-lan
+there is no firewall, and with
 .Fl -backend Cm qemu
-services on the host's loopback interface through 10.0.2.2.
-An agent can send anything it can read inside the machine to the network.
+the host's loopback interface is then reachable through 10.0.2.2.
 .Pp
 A shared directory is fully readable and writable by the agent, and files
 written there are on the host.

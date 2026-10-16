@@ -1,0 +1,57 @@
+#!/usr/sbin/nft -f
+# Written by agentcage as /etc/nftables.nft in the VM.
+#
+# Lets the VM reach the internet but not your local network or the host:
+# connections to private, link-local and multicast addresses are refused.
+# Exceptions: DNS and DHCP (needed to work at all), replies to connections
+# made into the VM (your SSH sessions), and the loopback interface.
+#
+# Only root in the VM can change this, and the agent account has no root.
+# Create the VM with --allow-lan to leave this file out.
+
+flush ruleset
+
+table inet agentcage {
+	set local4 {
+		type ipv4_addr
+		flags interval
+		elements = {
+			0.0.0.0/8,       # "this network"
+			10.0.0.0/8,      # private; QEMU's user networking maps the host to 10.0.2.2
+			100.64.0.0/10,   # carrier-grade NAT
+			127.0.0.0/8,     # loopback, if reached other than over lo
+			169.254.0.0/16,  # link-local, including cloud metadata services
+			172.16.0.0/12,   # private
+			192.168.0.0/16,  # private; libvirt's default network
+			224.0.0.0/4,     # multicast (mDNS and other LAN discovery)
+			240.0.0.0/4      # reserved and broadcast
+		}
+	}
+
+	set local6 {
+		type ipv6_addr
+		flags interval
+		elements = {
+			::1/128,         # loopback, if reached other than over lo
+			fc00::/7,        # unique local (private)
+			fe80::/10,       # link-local
+			fec0::/10,       # site-local; QEMU's user networking maps the host to fec0::2
+			ff00::/8         # multicast
+		}
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+		oifname "lo" accept
+		ct state established,related accept
+		# sshd's side of your SSH sessions, including any that were open
+		# before this firewall started (conntrack doesn't know those). Only
+		# root can use port 22, and the agent has no root.
+		tcp sport 22 accept
+		meta l4proto { tcp, udp } th dport 53 accept   # DNS
+		udp sport 68 udp dport 67 accept               # DHCP
+		meta l4proto ipv6-icmp accept                  # IPv6 neighbour discovery
+		ip daddr @local4 reject with icmpx admin-prohibited
+		ip6 daddr @local6 reject with icmpx admin-prohibited
+	}
+}

@@ -16,6 +16,8 @@ With the defaults (no shared folder), an agent inside the VM cannot:
 - use your SSH agent or X11 display (the SSH entry sets `ForwardAgent no`
   and `ForwardX11 no`)
 - reach your machine's kernel: the VM runs its own Linux kernel under KVM
+- reach your local network or services on your machine: a firewall in the
+  VM refuses connections to private, link-local and multicast addresses
 - become root in the VM, use your account there, or read your home folder
   in it: the agent runs in its own `agent` account, which has no `doas`
 
@@ -37,15 +39,13 @@ Alpine's GPG signature, with the signing key pinned by fingerprint in
 
 - **Anything in the agent account.** API keys, the deploy key, `~/shared`
   and any code you give the agent are readable by it, by design.
-- **The network.** The VM can reach the internet and your local network,
-  so an agent can send out anything it can read in the VM. With libvirt it
-  can also reach services on the host's `virbr0` address; with
-  `--backend qemu`, services on the host's loopback interface through
-  `10.0.2.2`.
-- **Root in the VM.** The separation between the accounts relies on the
-  agent not getting root. A local privilege escalation bug in the VM's
-  kernel or software, or a mistake in your account (running something the
-  agent wrote with `doas`), would undo it.
+- **The internet.** The VM can reach the internet, so an agent can send out
+  anything it can read.
+- **Root in the VM.** The firewall and the separation between the accounts
+  rely on the agent not getting root. A local privilege escalation bug in
+  the VM's kernel or software, or a mistake in your account (running
+  something the agent wrote with `doas`), would undo both. With
+  `--allow-lan` there is no firewall at all.
 - **A shared folder.** `--share` gives the agent read-write access to that
   folder on your computer. Anything the agent writes there (scripts, build
   files, `.git/hooks`, editor config) runs on your computer when you use
@@ -64,8 +64,8 @@ Alpine's GPG signature, with the signing key pinned by fingerprint in
 - Move code with Git instead of a shared folder, and give the VM a
   read-only deploy key unless it must push.
 - Use API keys that are limited to this purpose and have spending limits.
-- Restrict the VM's network (an isolated libvirt network or firewall rules)
-  if it doesn't need the internet or your LAN.
+- Keep the default firewall. If the agent doesn't need the internet either,
+  put the VM on an isolated libvirt network.
 - Treat VMs as disposable: `acage delete` and recreate rather than keeping
   one forever.
 

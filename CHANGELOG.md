@@ -20,6 +20,8 @@ First release, planned as 0.1.0.
   yours, with root through `doas` (optionally behind a password with
   `--password`, or none with `--no-doas`). `acage attach` asks which one to
   log in as.
+- A firewall in the VM: internet yes, local network and host no
+  (`--allow-lan` to turn it off).
 - libvirt backend with a hardened domain template, and a `qemu` backend
   that runs QEMU directly without libvirt.
 - Optional shared folder (`--share`) with a confirmation warning, refusal

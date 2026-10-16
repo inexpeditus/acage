@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # The first-boot (cloud-init) config: everything that goes into a new VM.
-# Accounts, root access, packages, the agent harnesses and the shared-folder
-# mount are all decided here. Sourced by acage.
+# Accounts, root access, packages, the firewall, the agent harnesses and the
+# shared-folder mount are all decided here. Sourced by acage.
 #
 # Every VM has two accounts, both reached directly over SSH with your key:
 #   GUEST_USER  you: root through doas (unless --no-doas)
 #   agent       runs the AI: no root, owns ~/shared, holds the API keys
-# The agent can't run anything as you, so it can't use your doas.
+# The agent can't run anything as you, so it can't use your doas, and with
+# no root it can't switch off the firewall.
 
 AGENT_USER=agent
 
@@ -85,10 +86,23 @@ EOF
       $rule
 EOF
   fi
+  # The firewall, base64 so the file survives the trip through YAML as is.
+  # Deferred so it replaces the default config the nftables package installs.
+  if [ "$ALLOW_LAN" != 1 ]; then
+    cat <<EOF
+  - path: /etc/nftables.nft
+    owner: root:root
+    permissions: "0644"
+    encoding: b64
+    defer: true
+    content: $(base64 -w0 "$DATA_DIR/firewall.nft")
+EOF
+  fi
   echo "packages:"
   {
     alpine_base_packages
     [ "$GUEST_DOAS" != 1 ] || alpine_doas_packages
+    [ "$ALLOW_LAN" = 1 ] || echo nftables
     for h in $(harness_list); do harness_packages "$h"; done
   } | tr ' ' '\n' | awk 'NF && !seen[$0]++ {print "  - " $0}'
   # runcmd runs at the end of first boot, after packages and deferred files.
@@ -101,6 +115,12 @@ runcmd:
   # Neither account can look into the other's home.
   - chmod 700 /home/$GUEST_USER /home/$AGENT_USER
 EOF
+  if [ "$ALLOW_LAN" != 1 ]; then
+    cat <<EOF
+  - rc-update add nftables default
+  - rc-service nftables restart
+EOF
+  fi
   [ -z "$SHARE_DIR" ] || share_guest_runcmd "$AGENT_USER"
   for h in $(harness_list); do
     p=$(harness_npm_package "$h")

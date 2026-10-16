@@ -6,8 +6,9 @@ machine.
 agentcage (command: `acage`) downloads Alpine Linux's official cloud image,
 verifies it, and boots a hardened VM from it. On first boot the VM creates two
 accounts that both accept your SSH key, `agent` for the AI (no root) and one
-for you (root through `doas`), and installs `git`, `vim`, Node.js and the
-agent harness(es) you pick:
+for you (root through `doas`), switches on a firewall that keeps the VM off
+your local network, and installs `git`, `vim`, Node.js and the agent
+harness(es) you pick:
 
 | Harness | Installs | Logs in with |
 |---|---|---|
@@ -16,8 +17,9 @@ agent harness(es) you pick:
 | `codex` | [Codex CLI](https://www.npmjs.com/package/@openai/codex) | ChatGPT account or OpenAI API key |
 
 The agent runs on its own kernel, in its own account. It can't see your files
-(unless you share a folder), your clipboard, your USB devices or your SSH
-agent, and it can't become root in the VM.
+(unless you share a folder), your clipboard, your USB devices, your SSH agent,
+your local network or the services on your machine, and it can't become root
+in the VM to change that.
 
 ## Install
 
@@ -118,6 +120,7 @@ already created aren't affected.
 | `--share DIR` | none | Share a host folder at `~/shared` in the VM, created if missing ([read this first](#shared-folder)) |
 | `--password` | off | Set a password for your account ([see below](#accounts-in-the-vm)) |
 | `--no-doas` | off | Don't give your account root either |
+| `--allow-lan` | off | Let the VM reach your local network and this host ([see below](#hardening-and-networking)) |
 | `--ram MB` | `2048` | At least 512 |
 | `--vcpus N` | `2` | |
 | `--disk GB` | `10` | The image is grown to this size |
@@ -139,7 +142,7 @@ already created aren't affected.
 | Can see the other's home | no | no |
 
 The agent can't run anything as you, so it can't use your `doas`, and without
-root it can't change the system. When it needs
+root it can't switch off the VM's firewall or change the system. When it needs
 a package, it has to ask you:
 
 ```sh
@@ -209,19 +212,32 @@ If any step fails, the download is discarded.
 What agentcage does and doesn't protect against, and what it trusts, is
 spelled out in [SECURITY.md](SECURITY.md).
 
+**Network.** The VM can reach the internet (npm, apk, GitHub, AI APIs), but
+not your local network or this host:
+
+| From the VM to | |
+|---|---|
+| The internet | ✓ |
+| DNS and DHCP | ✓ (needed to work at all) |
+| Your SSH sessions into the VM | ✓ |
+| Your LAN: router, NAS, printers, other computers | ✗ |
+| Services on your machine (e.g. a local Ollama or database) | ✗ |
+
+A firewall inside the VM ([`share/firewall.nft`](share/firewall.nft)) refuses
+connections to private, link-local and multicast addresses. Only root in the
+VM can change it, and the agent has no root. `--allow-lan` creates the VM
+without it, if the agent needs something on your network.
+
 **libvirt.** The VM template (`share/domain.xml`) has no shared
 memory (unless you share a folder), no clipboard or guest-agent channel, no
 audio, no USB controller and no VMware backdoor port, and its display doesn't
-listen on the network. The VM sits on libvirt's `default` NAT network, so it
-can reach the internet, your LAN, and services listening on the host's
-`virbr0` address.
+listen on the network. QEMU runs as a separate system user, so even an escape
+from the VM wouldn't land in your account.
 
 **`--backend qemu`.** QEMU runs as your user with no display, audio or USB
-devices. Networking is QEMU's user-mode NAT; SSH reaches the VM through a port
-on `127.0.0.1` only. The VM can reach the internet and your LAN, and **it can
-reach services listening on your host's localhost** through the address
-`10.0.2.2`. Don't run anything sensitive on localhost without authentication
-while a VM is up.
+devices. SSH reaches the VM through a port on `127.0.0.1` only. QEMU maps your
+host's localhost to `10.0.2.2` in the VM, which the firewall blocks (unless
+`--allow-lan`).
 
 **Both.** The generated SSH config entry sets `ForwardAgent no` and
 `ForwardX11 no`, so your SSH agent and display never reach the VM. Alpine's
@@ -276,6 +292,9 @@ Fedora and other SELinux systems, label a folder outside
   things.
 - **`doas: Operation not permitted` in your account.** The VM was created
   with `--no-doas`, or by an older version of agentcage. Recreate it.
+- **The agent can't reach something on your network** (a local Git server,
+  model server or package mirror). The firewall blocks that by design;
+  recreate the VM with `--allow-lan` if it really needs it.
 
 ## Packaging
 
@@ -306,6 +325,7 @@ home folder and stand-ins for `virsh`, `sudo` and QEMU.
 | `lib/common.sh` | Shared helpers (logging, dry-run, prompts) |
 | `share/domain.xml` | libvirt VM template |
 | `share/image-signing.asc` | Alpine's cloud-image signing key |
+| `share/firewall.nft` | The VM's firewall: internet yes, LAN and host no |
 | `tests/` | Test suite (`tests/run`, one `test-*.sh` file per area) |
 | `Makefile` | `install`, `uninstall`, `check`, `test` |
 | `SECURITY.md` | Threat model and how to report vulnerabilities |

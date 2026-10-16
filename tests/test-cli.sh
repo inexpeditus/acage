@@ -144,6 +144,13 @@ test_attach_and_ssh_flags() {
   assert_rc 1; assert_out "is the agent's account"
 }
 
+test_firewall_is_on_unless_allow_lan() {
+  acage_run create box --user roy --pool-dir "$POOL" --disk 1 -n
+  assert_rc 0; assert_out "path: /etc/nftables.nft"
+  acage_run create box --user roy --pool-dir "$POOL" --disk 1 --allow-lan -n
+  assert_rc 0; assert_not_out "nftables"
+}
+
 test_start_unknown_vm() {
   acage_run start nope --backend qemu --pool-dir "$POOL"
   assert_rc 1; assert_out "No VM named 'nope'"

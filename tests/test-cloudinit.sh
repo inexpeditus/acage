@@ -56,6 +56,20 @@ test_userdata_agent_gets_the_host_uid() {
   fi
 }
 
+test_userdata_firewall() {
+  load_libs
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_out "path: /etc/nftables.nft"
+  assert_out "rc-update add nftables default"
+  local b64
+  b64=$(printf '%s\n' "$OUT" | awk '/path: \/etc\/nftables.nft/ {f=1} f && /content:/ {print $2; exit}')
+  printf '%s' "$b64" | base64 -d | cmp -s - "$ROOT/share/firewall.nft" || fail "firewall content differs from share/firewall.nft"
+  yaml_check '"nftables" in d["packages"]'
+  ALLOW_LAN=1
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_not_out "nftables"
+}
+
 test_userdata_with_password() {
   load_libs
   GUEST_PW_HASH='$6$salt$hash'

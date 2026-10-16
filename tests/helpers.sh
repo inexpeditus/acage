@@ -62,7 +62,7 @@ assert_fails() {
 
 # load_libs [BACKEND] -> sources lib/ with the defaults acage would set.
 load_libs() {
-  VM=box GUEST_USER=roy GUEST_DOAS=1 GUEST_PW_HASH="" HARNESS=pi SHARE_DIR="" WHO=""
+  VM=box GUEST_USER=roy GUEST_DOAS=1 GUEST_PW_HASH="" HARNESS=pi SHARE_DIR="" ALLOW_LAN=0 WHO=""
   RAM_MB=2048 VCPUS=2 DISK_GB=10 SSH_PUBKEY="" DRY_RUN=0 ASSUME_YES=0
   BACKEND=${1:-libvirt} DATA_DIR=$ROOT/share POOL_DIR=$POOL
   local f

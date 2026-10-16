@@ -7,7 +7,9 @@
 
 # Options for talking to a VM whose host key isn't recorded yet.
 probe_opts() {
-  printf '%s\n' -o BatchMode=yes -o ConnectTimeout=5 -o UserKnownHostsFile=/dev/null \
+  # ServerAlive: give up on a connection that went silent instead of waiting forever.
+  printf '%s\n' -o BatchMode=yes -o ConnectTimeout=5 -o ServerAliveInterval=15 \
+    -o ServerAliveCountMax=4 -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no -o LogLevel=ERROR -o IdentitiesOnly=yes \
     -o "IdentityFile=$(image_privkey_file)" -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT"
 }
@@ -230,5 +232,6 @@ image_next_steps() {
     echo "  Boot log:         acage console $VM"
     for h in $(harness_list); do echo "  $(harness_login_hint "$h")"; done
     [ -z "$SHARE_DIR" ] || echo "  Shared folder:    $SHARE_DIR  <->  ~/shared for $AGENT_USER"
+    [ "$ALLOW_LAN" = 1 ] || echo "  Network:          internet only; your LAN and this host are blocked (--allow-lan to change)"
   } >&2
 }
