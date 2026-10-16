@@ -250,8 +250,8 @@ Fedora and other SELinux systems, label a folder outside
 ## Packaging
 
 `make install PREFIX=/usr DESTDIR="$pkgdir"` installs the command to
-`bin/`, the scripts to `lib/agentcage/` and the data files to
-`share/agentcage/`. The command finds them relative to itself, so any prefix
+`bin/`, the scripts to `lib/agentcage/`, the data files to
+`share/agentcage/` and the man page to `share/man/man1/`. The command finds them relative to itself, so any prefix
 works. `make uninstall` removes them again.
 
 `make check` runs `bash -n` and shellcheck, and `make test` runs the tests in
@@ -263,6 +263,7 @@ home folder and stand-ins for `virsh`, `sudo` and QEMU.
 | File | Purpose |
 |---|---|
 | `acage` | The command: options, prompts, and dispatch to the backend |
+| `acage.1` | Man page (`man acage` once installed, or `man ./acage.1`) |
 | `lib/backend-libvirt.sh` | Default backend: libvirt VMs from `share/domain.xml` |
 | `lib/backend-qemu.sh` | `--backend qemu`: QEMU run directly as your user, with KVM |
 | `lib/pool.sh` | Where images and disks go, free-space checks, saved settings |

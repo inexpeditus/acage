@@ -1,0 +1,286 @@
+.Dd October 16, 2026
+.Dt ACAGE 1
+.Os
+.Sh NAME
+.Nm acage
+.Nd run coding agents in disposable Alpine Linux virtual machines
+.Sh SYNOPSIS
+.Nm
+.Cm install | create
+.Op Ar name
+.Op Fl ny
+.Op Fl -backend Ar backend
+.Op Fl -disk Ar GB
+.Op Fl -harness Ar list
+.Op Fl -no-doas
+.Op Fl -no-wait
+.Op Fl -password
+.Op Fl -pool-dir Ar dir
+.Op Fl -ram Ar MB
+.Op Fl -share Ar dir
+.Op Fl -ssh-pubkey Ar file
+.Op Fl -user Ar user
+.Op Fl -vcpus Ar N
+.Nm
+.Cm image
+.Op Fl ny
+.Nm
+.Cm ssh
+.Ar name
+.Op Fl - Ar command ...
+.Nm
+.Cm start | stop | console | delete
+.Ar name
+.Op Fl ny
+.Nm
+.Cm list
+.Sh DESCRIPTION
+.Nm
+downloads Alpine Linux's official cloud image, verifies its checksum and
+signature, and boots a virtual machine from it in which a coding agent can
+run with its own kernel, away from the host.
+On first boot the machine creates a user with the given SSH key, gives that
+user root through
+.Xr doas 1 ,
+and installs
+.Xr git 1 ,
+.Xr vim 1 ,
+Node.js and the chosen agent harnesses.
+Nothing from the host is shared with the machine unless
+.Fl -share
+is given.
+.Pp
+The commands are as follows:
+.Bl -tag -width Ds
+.It Cm install Op Ar name
+Run
+.Cm image ,
+then
+.Cm create .
+.It Cm image
+Download the newest Alpine UEFI cloud image, check it against the SHA-512
+checksum Alpine publishes, and check Alpine's GPG signature on it in a
+temporary keyring against the key shipped with
+.Nm .
+The fingerprint is shown for comparison with the one published at
+.Lk https://alpinelinux.org/cloud/
+unless
+.Fl y
+is given.
+If any check fails, the download is discarded.
+.It Cm create Op Ar name
+Create and boot a machine from the downloaded image.
+Unless
+.Fl -no-wait
+is given,
+.Nm
+then waits for first boot to finish, checks that the agents run, adds an
+entry to
+.Pa ~/.ssh/config ,
+and, when run from a terminal, offers to store API keys in the machine,
+to generate a GitHub deploy key in it, and to connect.
+.It Cm ssh Ar name Op Fl - Ar command ...
+Connect to the machine at its current address, or run
+.Ar command
+in it.
+.It Cm start Ar name
+Start a stopped machine.
+.It Cm stop Ar name
+Shut a machine down cleanly, forcing it off if it does not stop within a
+minute.
+.It Cm console Ar name
+Attach to the serial console
+.Pq libvirt
+or follow the boot output
+.Pq qemu .
+.It Cm list
+List the machines
+.Nm
+created.
+.It Cm delete Ar name
+Delete a machine, its disk and its SSH configuration entry.
+Machines
+.Nm
+did not create are refused.
+.El
+.Pp
+Settings for
+.Cm install
+and
+.Cm create
+that are not given as options are asked for when running in a terminal;
+otherwise the defaults below are used.
+.Pp
+The options are as follows:
+.Bl -tag -width Ds
+.It Fl -backend Ar backend
+.Cm libvirt
+.Pq the default
+defines the machine on the
+.Li qemu:///system
+connection.
+.Cm qemu
+runs
+.Xr qemu-system-x86_64 1
+directly as the invoking user, without libvirt.
+.It Fl -disk Ar GB
+Disk size.
+The disk starts small and can grow to this size.
+The default is 10.
+.It Fl -harness Ar list
+Comma-separated agent harnesses to install:
+.Cm pi ,
+.Cm claude-code ,
+.Cm codex ,
+or
+.Cm none .
+The default is
+.Cm pi .
+.It Fl -name Ar name
+Name of the machine, also its hostname and SSH alias.
+It can also be given as the argument after the command.
+The default is
+.Li agentcage .
+.It Fl n , Fl -dry-run
+Print what would be changed instead of changing it.
+.It Fl -no-doas
+Do not give the guest user root.
+.It Fl -password
+Ask for a password for the guest user.
+Only its SHA-512 crypt hash is put in the machine.
+.Xr doas 1
+then asks for it, and it works for console login and
+.Xr su 1 .
+Without it the account has no password and
+.Xr doas 1
+does not ask for one.
+SSH login is key-only either way.
+.It Fl -pool-dir Ar dir
+Where images and disks are kept.
+The choice is saved and used by later commands.
+With libvirt the default is
+.Pa /var/lib/libvirt/images/agentcage ,
+or
+.Pa /home/agentcage
+when
+.Pa /
+is a separate filesystem with less free space than
+.Pa /home .
+With qemu it is
+.Pa ~/.local/share/agentcage .
+.It Fl -ram Ar MB
+Memory, at least 512.
+The default is 2048.
+.It Fl -share Ar dir
+Make
+.Ar dir
+appear read-write as
+.Pa ~/shared
+in the machine.
+.Nm
+prints what this exposes and asks for
+.Ql share
+to be typed before going on.
+It refuses
+.Pa / ,
+the home directory, anything containing it, and credential directories
+such as
+.Pa ~/.ssh .
+A missing
+.Ar dir
+is created after the confirmation.
+.It Fl -ssh-pubkey Ar file
+Public key to authorize for the guest user.
+The default is
+.Pa ~/.ssh/id_agentcage.pub ,
+generated if missing.
+.It Fl -user Ar user
+User to create in the machine.
+The default is the invoking user's name.
+.It Fl -vcpus Ar N
+Number of virtual CPUs.
+The default is 2.
+.It Fl -no-wait
+Start the machine and return without waiting for first boot.
+.It Fl y , Fl -yes
+Do not ask for confirmation: of the image key fingerprint, of the
+shared-folder warning, or before deleting.
+.It Fl h , Fl -help
+Print a summary of commands and options.
+.It Fl -version
+Print the version.
+.El
+.Pp
+Before downloading or creating anything,
+.Nm
+checks that the pool directory's filesystem has room for the full disk
+size, plus 5 GB that stays free when it is the root filesystem.
+.Sh ENVIRONMENT
+.Bl -tag -width Ds
+.It Ev AGENTCAGE_BACKEND
+Backend to use when
+.Fl -backend
+is not given.
+.It Ev XDG_CACHE_HOME , XDG_CONFIG_HOME , XDG_DATA_HOME
+Base directories for the download cache, the settings file and the qemu
+pool, as in the XDG Base Directory specification.
+.El
+.Sh FILES
+.Bl -tag -width Ds -compact
+.It Pa ~/.config/agentcage/config
+Saved settings, such as the pool directory.
+.It Pa ~/.ssh/id_agentcage
+Default SSH key.
+.It Pa ~/.ssh/config
+Each machine gets an entry between
+.Ql # agentcage:begin Ar name
+and
+.Ql # agentcage:end Ar name .
+.It Pa /var/lib/libvirt/images/agentcage
+Default libvirt pool.
+.It Pa ~/.local/share/agentcage
+Default qemu pool.
+.It Pa /mnt/acage-shared/ Ns Ar name
+Suggested shared directory.
+.El
+.Sh EXIT STATUS
+.Ex -std
+.Cm create
+also fails when the machine never becomes reachable over SSH.
+.Sh EXAMPLES
+Create a machine with Claude Code and connect to it:
+.Pp
+.Dl $ acage install mybox --harness claude-code
+.Dl $ acage ssh mybox
+.Pp
+Run a command in it and copy the output to the host clipboard:
+.Pp
+.Dl $ acage ssh mybox -- cat '~/notes.md' | wl-copy
+.Pp
+See what a machine would look like without changing anything:
+.Pp
+.Dl $ acage create test --harness codex --no-doas -n
+.Sh SEE ALSO
+.Xr ssh 1 ,
+.Xr ssh_config 5 ,
+.Xr qemu-system-x86_64 1 ,
+.Xr virsh 1 ,
+.Xr doas.conf 5
+.Sh SECURITY CONSIDERATIONS
+The machine can reach the network: the internet, the local network, and
+services on the host's libvirt bridge address, or with
+.Fl -backend Cm qemu
+services on the host's loopback interface through 10.0.2.2.
+An agent can send anything it can read inside the machine to the network.
+.Pp
+A shared directory is fully readable and writable by the agent, and files
+written there are on the host.
+With libvirt it is served by a process running as root, so root in the
+machine can create root-owned and setuid files in it.
+.Pp
+Agent packages are installed from npm at their latest versions on first
+boot.
+.Pp
+See
+.Pa SECURITY.md
+in the source distribution for the full threat model.
