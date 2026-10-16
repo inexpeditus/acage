@@ -252,8 +252,11 @@ Fedora and other SELinux systems, label a folder outside
 `make install PREFIX=/usr DESTDIR="$pkgdir"` installs the command to
 `bin/`, the scripts to `lib/agentcage/` and the data files to
 `share/agentcage/`. The command finds them relative to itself, so any prefix
-works. `make uninstall` removes them again, and `make check` runs `bash -n`
-and shellcheck.
+works. `make uninstall` removes them again.
+
+`make check` runs `bash -n` and shellcheck, and `make test` runs the tests in
+`tests/`. The tests need no VMs, network or root: each one gets a temporary
+home folder and stand-ins for `virsh`, `sudo` and QEMU.
 
 ## Files
 
@@ -272,7 +275,8 @@ and shellcheck.
 | `lib/common.sh` | Shared helpers (logging, dry-run, prompts) |
 | `share/domain.xml` | libvirt VM template |
 | `share/image-signing.asc` | Alpine's cloud-image signing key |
-| `Makefile` | `install`, `uninstall`, `check` |
+| `tests/` | Test suite (`tests/run`, one `test-*.sh` file per area) |
+| `Makefile` | `install`, `uninstall`, `check`, `test` |
 
 ## License
 

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Runs every test_* function from tests/test-*.sh, each in its own subshell
+# with a temporary HOME and stand-ins for virsh, sudo and qemu. No VMs, no
+# network, no root.
+#
+# Usage: tests/run [test_name...]
+set -u
+cd "$(dirname "$0")/.." || exit 1
+ROOT=$PWD
+
+. tests/helpers.sh
+for f in tests/test-*.sh; do
+  # shellcheck source=/dev/null
+  . "$f"
+done
+
+pass=0
+failed=()
+for t in $(declare -F | awk '$3 ~ /^test_/ {print $3}'); do
+  if [ $# -gt 0 ] && [[ " $* " != *" $t "* ]]; then continue; fi
+  setup
+  # Not in an 'if' or before '||': bash ignores set -e for anything run as
+  # part of a condition, which would let a failing command pass silently.
+  (set -eu; "$t") >"$TMP/.out" 2>&1
+  rc=$?
+  out=$(cat "$TMP/.out")
+  if [ "$rc" = 0 ]; then
+    pass=$((pass + 1))
+    printf 'ok   %s\n' "$t"
+  else
+    failed+=("$t")
+    printf 'FAIL %s\n' "$t"
+    printf '%s\n' "$out" | sed 's/^/     | /'
+  fi
+  teardown
+done
+
+echo
+echo "$pass passed, ${#failed[@]} failed"
+[ ${#failed[@]} -eq 0 ]

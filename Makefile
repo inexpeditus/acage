@@ -17,7 +17,7 @@ LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/c
        lib/provision.sh lib/backend-libvirt.sh lib/backend-qemu.sh
 DATAFILES = share/domain.xml share/image-signing.asc
 
-.PHONY: all install uninstall check
+.PHONY: all install uninstall check test
 
 all:
 	@echo "Nothing to build. Run 'make install' (PREFIX=$(PREFIX))."
@@ -35,5 +35,8 @@ uninstall:
 	rm -rf $(LIB) $(DATA) $(DOC) $(LICENSES)
 
 check:
-	for f in acage $(LIBS); do bash -n $$f || exit 1; done
-	shellcheck -x -s bash -S error acage $(LIBS)
+	for f in acage $(LIBS) tests/run tests/*.sh; do bash -n $$f || exit 1; done
+	shellcheck -x -s bash -S error acage $(LIBS) tests/run tests/*.sh
+
+test:
+	tests/run
