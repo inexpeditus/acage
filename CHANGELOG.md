@@ -6,7 +6,9 @@ change behaviour.
 
 ## [Unreleased]
 
-First release, planned as 0.1.0.
+## [0.1.0] - 2026-10-16
+
+First release.
 
 ### Added
 
@@ -36,3 +38,6 @@ First release, planned as 0.1.0.
   (only on an explicit yes) a shared folder acage created.
 - `make install` / `uninstall`, the `acage(1)` man page, a test suite
   (`make test`) and CI.
+
+[Unreleased]: https://github.com/inexpeditus/agentcage/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/inexpeditus/agentcage/releases/tag/v0.1.0
