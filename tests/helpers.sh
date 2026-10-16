@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Shared setup and assertions for tests/run. Sourced, not run.
 
+# Python modules installed in the real home (pip --user) stay visible after
+# HOME is pointed at a temporary folder.
+export PYTHONUSERBASE=${PYTHONUSERBASE:-$HOME/.local}
+
 setup() {
   TMP=$(mktemp -d)
   export HOME=$TMP/home XDG_CONFIG_HOME=$TMP/home/.config XDG_CACHE_HOME=$TMP/home/.cache XDG_DATA_HOME=$TMP/home/.local/share

@@ -76,7 +76,8 @@ test_dry_run_qemu_command_line() {
   assert_rc 0
   assert_out "[dry-run] qemu-system-"
   assert_out "-accel kvm"
-  assert_out "hostfwd=tcp:127.0.0.1:2222-:22"
+  # SSH forwarded from a free port on 127.0.0.1 only (2222 or the next free one).
+  [[ "$OUT" =~ hostfwd=tcp:127\.0\.0\.1:2[23][0-9][0-9]-:22 ]] || fail "no localhost-only SSH forward in: $OUT"
   assert_out "-nodefaults"
   assert_not_out "-virtfs"
 }
