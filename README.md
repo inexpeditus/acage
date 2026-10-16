@@ -3,63 +3,88 @@
 Run a coding agent in a disposable, locked-down VM instead of on your own
 machine.
 
-`agentcage` downloads Alpine Linux's official cloud image, verifies it, and
-boots a hardened libvirt VM from it. On first boot the VM creates a user with
-your SSH key, gives that user root through `doas`, and installs `git`,
-`openssh`, `nodejs`, `npm` and the [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
-coding agent. There's no installer to click through and no manual OS setup.
+agentcage (command: `acage`) downloads Alpine Linux's official cloud image, verifies it, and
+boots a hardened VM from it. On first boot the VM creates a user with your SSH
+key, gives that user root through `doas`, and installs `git`, `vim`, Node.js
+and the agent harness(es) you pick:
 
-The agent can do whatever it likes inside the VM. It can't see your files,
-your clipboard, your USB devices or your SSH agent.
+| Harness | Installs | Logs in with |
+|---|---|---|
+| `pi` (default) | [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) | Anthropic API key |
+| `claude-code` | [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code) | Claude account or Anthropic API key |
+| `codex` | [Codex CLI](https://www.npmjs.com/package/@openai/codex) | ChatGPT account or OpenAI API key |
 
-## Requirements
+The agent can do whatever it likes inside the VM. It can't see your files
+(unless you share a folder), your clipboard, your USB devices or your SSH
+agent.
 
-A Linux x86_64 host with KVM and:
+## Install
 
-- libvirt with the system connection (`qemu:///system`), the `default` network,
-  and UEFI firmware (OVMF / edk2)
-- `virsh`, `qemu-img`, `xorriso`, `perl`, `curl`, `gpg`, `sha512sum`,
-  `ssh`, `ssh-keygen`, `sudo`
-- `openssl`, only if you use `--password`
-
-On Arch:
+From a checkout, run `./acage` directly, or install it:
 
 ```bash
-sudo pacman -S libvirt qemu-base edk2-ovmf dnsmasq libisoburn perl curl gnupg openssh openssl
+sudo make install                 # /usr/local/bin/acage
+```
+
+Then install the host dependencies:
+
+**Arch**
+
+```bash
+sudo pacman -S libvirt qemu-base edk2-ovmf dnsmasq libisoburn perl curl gnupg openssh
+sudo pacman -S virtiofsd          # only for --share
 sudo systemctl enable --now libvirtd
 sudo virsh net-start default && sudo virsh net-autostart default
 ```
 
+**Ubuntu / Debian**
+
+```bash
+sudo apt install libvirt-daemon-system qemu-system-x86 qemu-utils ovmf xorriso perl curl gnupg openssh-client
+sudo apt install virtiofsd        # only for --share (Ubuntu 24.04+; older releases ship it in qemu-system-common)
+```
+
+Ubuntu starts libvirt and its `default` network for you.
+
 ## Quick start
 
 ```bash
-./create.sh --name mybox --user agent install
+acage install mybox --harness claude-code
 ```
 
 This downloads and verifies the image, creates the VM, waits for first boot to
-finish, and then walks you through the last steps:
+finish, and then:
 
 1. adds a `Host mybox` entry to `~/.ssh/config`
-2. offers to store an Anthropic API key for Pi inside the VM
-   (`~/.pi/agent/auth.json`, mode 600; the key is sent over SSH, never put in a
-   file on the host)
+2. offers to store an API key for each harness inside the VM (it goes over
+   SSH; nothing is written to disk on the host)
 3. offers to generate a GitHub deploy key inside the VM and prints the public
    half for you to add to your repo
 4. offers to connect
 
-After that, `ssh mybox` gets you in.
+After that:
 
-Any setting you don't pass as an option is asked for interactively. When it
-isn't run from a terminal (piped or scripted), it uses the flags and defaults
-without asking.
+```bash
+acage ssh mybox
+```
+
+Any setting you don't pass as an option is asked for interactively. When
+`acage` isn't run from a terminal (piped or scripted), it uses the options
+and defaults without asking, and skips the API-key, deploy-key and connect
+steps.
 
 ## Commands
 
-| Command   | What it does |
-|-----------|--------------|
-| `install` | `image`, then `create` |
-| `image`   | Download the latest Alpine UEFI cloud image and verify it |
-| `create`  | Build a VM from the already-downloaded image |
+| Command | What it does |
+|---|---|
+| `install [NAME]` | `image`, then `create` |
+| `image` | Download the latest Alpine cloud image and verify it |
+| `create [NAME]` | Create and boot a VM from the downloaded image |
+| `ssh NAME [-- CMD]` | Connect to a VM, or run `CMD` in it |
+| `start NAME` / `stop NAME` | Start or shut down a VM |
+| `console NAME` | Serial console (libvirt) or boot output (qemu) |
+| `list` | List VMs |
+| `delete NAME` | Delete a VM, its disk and its SSH config entry |
 
 Run `image` again whenever you want a newer Alpine release. VMs you've
 already created aren't affected.
@@ -68,18 +93,21 @@ already created aren't affected.
 
 | Option | Default | |
 |---|---|---|
-| `--name NAME` | `alpine-box` | VM name; also its hostname and SSH alias |
-| `--user NAME` | your username (asked) | User to create in the VM; required for `create` |
+| `--name NAME` | `agentcage` | VM name; also its hostname and SSH alias |
+| `--user NAME` | your username | User to create in the VM |
+| `--harness LIST` | `pi` | `pi`, `claude-code`, `codex`, comma-separated, or `none` |
+| `--share DIR` | none | Share a host folder at `~/shared` in the VM, created if missing ([read this first](#shared-folder)) |
+| `--password` | off | Set a password for the guest user (see below) |
+| `--no-doas` | off | Don't give the guest user root |
 | `--ram MB` | `2048` | |
 | `--vcpus N` | `2` | |
 | `--disk GB` | `10` | The image is grown to this size |
-| `--pool-dir DIR` | `/home/alpine-sandbox` | Where the image, disks and seed ISOs live (root-owned) |
-| `--ssh-pubkey FILE` | `~/.ssh/id_agentbox.pub` | Key to authorize; the default is generated if missing |
-| `--password` | off | Set a password for the guest user (see below) |
-| `--no-doas` | off | Don't give the guest user root |
-| `--no-wait` | off | Start the VM and print next steps instead of waiting |
+| `--ssh-pubkey FILE` | `~/.ssh/id_agentcage.pub` | Key to authorize; the default is generated if missing |
+| `--no-wait` | off | Start the VM and return without waiting for first boot |
+| `--backend NAME` | `libvirt` | `qemu` runs QEMU directly, without libvirt |
+| `--pool-dir DIR` | see below | Where images and disks are kept |
+| `-y`, `--yes` | off | Skip confirmations: image key fingerprint, shared-folder warning, delete |
 | `-n`, `--dry-run` | off | Print what would change instead of doing it |
-| `-y`, `--yes` | off | Don't ask you to confirm the signing-key fingerprint |
 
 ## Root inside the VM
 
@@ -97,6 +125,37 @@ doas apk add neovim
 
 SSH login is key-only in every case, and direct root login is disabled.
 
+## Shared folder
+
+`--share DIR` makes `DIR` on your computer appear as `~/shared` in the VM,
+read-write, on both sides at once. When you're asked interactively, the
+suggested folder is `/mnt/acage-shared/NAME`. A folder that doesn't exist yet
+is created, owned by you, after you've confirmed the warning below (using
+`sudo` under `/mnt`). It's convenient for working on a repo with
+an agent, but **it weakens the isolation agentcage exists to provide**:
+
+- The agent can read, change and delete everything in the folder: subfolders,
+  hidden files, `.git`, and any `.env`, key or token files.
+- Whatever it writes there ends up on your computer. Code the agent wrote runs
+  **outside** the VM as soon as you run, build, test or install it on the host:
+  scripts, binaries, Makefiles, `package.json` scripts, `.git/hooks`, editor
+  and direnv config. Review changes before you do any of that.
+- **libvirt:** the folder is served by a root process on the host
+  (virtiofsd). Root in the VM can therefore create root-owned files in it,
+  including setuid programs. Use `--no-doas` if the agent doesn't need root.
+  With `--backend qemu`, QEMU runs as your user, so files are always created
+  as you.
+- Commit and push anything you can't afford to lose first: the agent can
+  rewrite or delete Git history too.
+
+agentcage prints this warning and asks you to type `share` before creating the
+VM (`--yes` skips the question). It refuses to share `/`, your home folder
+(or anything containing it), and credential folders such as `~/.ssh`,
+`~/.gnupg`, `~/.aws` and `~/.kube`.
+
+The safer way to move code in and out is Git: give the VM a deploy key and
+push and pull through a remote.
+
 ## Image verification
 
 Before an image is used, `image`:
@@ -104,71 +163,76 @@ Before an image is used, `image`:
 1. checks it against the SHA-512 checksum Alpine publishes alongside it
 2. checks Alpine's GPG signature on it in a temporary keyring (your own
    keyring isn't touched, and no keyserver is involved). The signature must
-   be made by the key in `image-signing.asc`, fingerprint
+   be made by the key in `share/image-signing.asc`, fingerprint
    `F26A DFAD BAE7 02EF 7AF6 3745 9DA7 EF23 BFFC DF22`
 3. shows you that fingerprint and asks you to compare it with the one
    published at <https://alpinelinux.org/cloud/> (skip with `--yes`)
 
 If any step fails, the download is discarded.
 
-## Hardening
+## Hardening and networking
 
-The VM template (`domain.xml`) is stripped down by default:
+**libvirt.** The VM template (`share/domain.xml`) has no shared
+memory (unless you share a folder), no clipboard or guest-agent channel, no
+audio, no USB controller and no VMware backdoor port, and its display doesn't
+listen on the network. The VM sits on libvirt's `default` NAT network, so it
+can reach the internet, your LAN, and services listening on the host's
+`virbr0` address.
 
-- no shared folders or shared memory
-- no clipboard sharing and no guest-agent channel
-- no audio, no USB controller, no tablet device
-- the SPICE display doesn't listen on the network
-- no VMware backdoor port (`vmport`)
-- `ForwardAgent no` and `ForwardX11 no` in the generated SSH config entry
+**`--backend qemu`.** QEMU runs as your user with no display, audio or USB
+devices. Networking is QEMU's user-mode NAT; SSH reaches the VM through a port
+on `127.0.0.1` only. The VM can reach the internet and your LAN, and **it can
+reach services listening on your host's localhost** through the address
+`10.0.2.2`. Don't run anything sensitive on localhost without authentication
+while a VM is up.
 
-The VM is still on libvirt's `default` NAT network, so it can reach the
-internet, your LAN, and services on the host's `virbr0` address. Use an
-isolated libvirt network or firewall rules if that matters to you.
+The generated SSH config entry sets `ForwardAgent no` and `ForwardX11 no`, so
+your SSH agent and display never reach the VM.
 
-## Managing VMs
+## Where things are kept
 
-```bash
-sudo virsh -c qemu:///system list --all           # list VMs
-sudo virsh -c qemu:///system console mybox        # serial console (Ctrl+] to leave)
-sudo virsh -c qemu:///system shutdown mybox
-sudo virsh -c qemu:///system start mybox
-```
+| | libvirt | `--backend qemu` |
+|---|---|---|
+| Images and disks | `/var/lib/libvirt/images/agentcage` (root-only) | `~/.local/share/agentcage` |
+| SSH key | `~/.ssh/id_agentcage` | `~/.ssh/id_agentcage` |
+| SSH config | fenced `# agentcage:begin NAME` block in `~/.ssh/config` | same |
 
-Removing a VM:
-
-```bash
-sudo virsh -c qemu:///system destroy mybox        # if it's running
-sudo virsh -c qemu:///system undefine mybox --nvram
-sudo rm /home/alpine-sandbox/mybox.qcow2 /home/alpine-sandbox/mybox-seed.iso
-ssh-keygen -R mybox                               # then delete 'Host mybox' from ~/.ssh/config
-```
-
-If the VM's IP changes after a reboot, update `HostName` in its
-`~/.ssh/config` entry. You can find the new IP with
-`virsh -c qemu:///system domifaddr mybox --source lease`.
+`acage ssh NAME` always looks up the VM's current address. Plain
+`ssh NAME` uses the address saved when the VM was created, which on libvirt
+can change after the VM restarts.
 
 ## Troubleshooting
 
-- **The first boot seems slow.** Installing packages and Pi takes a minute or
-  two. Inside the VM, `cloud-init status --wait` blocks until it's done, and
-  `/var/log/cloud-init-output.log` shows what happened.
-- **SSH refuses your key.** First-boot setup probably failed. Watch it on the
-  serial console: `sudo virsh -c qemu:///system console mybox`.
+- **The first boot seems slow.** Installing packages and agents takes a few
+  minutes. Inside the VM, `cloud-init status --wait` blocks until it's done,
+  and `/var/log/cloud-init-output.log` shows what happened.
+- **SSH refuses your key.** First-boot setup probably failed. Look at the boot
+  output: `acage console NAME`.
 - **`doas: Operation not permitted`.** The VM was created with `--no-doas`, or
-  before root access was on by default. Recreate it.
+  by an older version of agentcage. Recreate it.
+
+## Packaging
+
+`make install PREFIX=/usr DESTDIR="$pkgdir"` installs the command to
+`bin/`, the scripts to `lib/agentcage/` and the data files to
+`share/agentcage/`. The command finds them relative to itself, so any prefix
+works. `make check` runs `bash -n` and shellcheck.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `create.sh` | Entry point: options, prompts, and the `image` / `create` steps |
-| `profile.sh` | Alpine specifics: image location, packages, signing key fingerprint |
-| `image-helpers.sh` | Signature checks, disk preparation, cloud-init config and seed ISO |
-| `provision.sh` | After boot: wait for SSH and cloud-init, SSH config entry, API key, deploy key |
-| `common.sh` | Shared helpers (logging, dry-run, prompts, `virsh` wrapper) |
-| `domain.xml` | libvirt VM template |
-| `image-signing.asc` | Alpine's cloud-image signing key |
+| `acage` | The command: options, prompts, and dispatch to the backend |
+| `lib/backend-libvirt.sh` | Default backend: libvirt VMs from `share/domain.xml` |
+| `lib/backend-qemu.sh` | `--backend qemu`: QEMU run directly as your user, with KVM |
+| `lib/alpine.sh` | Alpine specifics: image location, packages, signing key |
+| `lib/harness.sh` | Agent harnesses: packages, install, API key handling |
+| `lib/share.sh` | Shared folder: checks, warning, guest mount |
+| `lib/image.sh` | Signature checks, disk preparation, cloud-init config and seed ISO |
+| `lib/provision.sh` | After boot: wait for SSH and cloud-init, SSH config, keys |
+| `lib/common.sh` | Shared helpers (logging, dry-run, prompts) |
+| `share/domain.xml` | libvirt VM template |
+| `share/image-signing.asc` | Alpine's cloud-image signing key |
 
 ## License
 
