@@ -1,39 +1,39 @@
 <!--
-  Domain template for the agent-box VM (used by install.sh create).
+  libvirt domain template for agentcage VMs (Linux, libvirt backend).
 
-  Deliberately generic: no host paths, usernames, UUIDs, MACs, PCI addresses,
-  firmware paths or machine-version pins. libvirt fills those in for the host
-  it runs on. The installer substitutes the name, memory and vcpu count, the
-  disk path (DISK_PATH placeholder) and, only when hardening is turned off,
-  the shared folder (SHARED_DIR placeholder).
-  Hardened by default: the shared folder, shared memory, clipboard channel,
-  guest agent channel and audio device are all stripped. Pass your own
-  template to the installer if you want something different.
+  agentcage fills in the name, memory, vCPU count and disk path. With a shared
+  folder it fills in the folder and keeps the virtiofs filesystem device and
+  the shared memory backing it needs; without one it removes both.
+
+  Hardened: no clipboard or guest-agent channel, no audio, no USB controller,
+  no tablet, no VMware backdoor port, and the SPICE display doesn't listen on
+  the network. No UUIDs, MACs, PCI addresses or firmware paths: libvirt fills
+  those in for the host it runs on.
   Note: XML comments must not contain two hyphens in a row.
 -->
 <domain type="kvm">
-  <name>agent-box</name>
-  <memory unit="KiB">4194304</memory>
-  <currentMemory unit="KiB">4194304</currentMemory>
+  <name>agentcage</name>
+  <description>Created by agentcage</description>
+  <memory unit="KiB">2097152</memory>
+  <currentMemory unit="KiB">2097152</currentMemory>
   <memoryBacking>
     <source type="memfd"/>
     <access mode="shared"/>
   </memoryBacking>
-  <vcpu placement="static">4</vcpu>
+  <vcpu placement="static">2</vcpu>
   <os firmware="efi">
     <type arch="x86_64" machine="q35">hvm</type>
     <firmware>
       <feature enabled="no" name="enrolled-keys"/>
       <feature enabled="no" name="secure-boot"/>
     </firmware>
-    <bootmenu enable="yes"/>
+    <bootmenu enable="no"/>
     <smbios mode="sysinfo"/>
   </os>
   <!--
-    Tells cloud-init (image install method guests only) to use the NoCloud seed
-    ISO straight away, instead of spending minutes retrying EC2/OpenStack style
-    metadata URLs that do not exist on a local libvirt network before falling
-    back to it. Ignored by everything else, including a plain ISO install.
+    Tells cloud-init to use the NoCloud seed ISO straight away, instead of
+    spending minutes retrying EC2/OpenStack style metadata URLs that do not
+    exist on a local libvirt network.
   -->
   <sysinfo type="smbios">
     <system>
@@ -73,7 +73,7 @@
     <filesystem type="mount" accessmode="passthrough">
       <driver type="virtiofs"/>
       <source dir="@SHARED_DIR@"/>
-      <target dir="shared"/>
+      <target dir="agentcage"/>
     </filesystem>
     <interface type="network">
       <source network="default"/>
@@ -85,18 +85,12 @@
     <console type="pty">
       <target type="serial" port="0"/>
     </console>
-    <channel type="unix">
-      <target type="virtio" name="org.qemu.guest_agent.0"/>
-    </channel>
-    <channel type="spicevmc">
-      <target type="virtio" name="com.redhat.spice.0"/>
-    </channel>
-    <input type="tablet" bus="usb"/>
+    <controller type="usb" model="none"/>
     <graphics type="spice">
       <listen type="none"/>
       <image compression="off"/>
     </graphics>
-    <audio id="1" type="spice"/>
+    <audio id="1" type="none"/>
     <video>
       <model type="virtio" heads="1" primary="yes"/>
     </video>

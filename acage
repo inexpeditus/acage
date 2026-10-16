@@ -1,0 +1,264 @@
+#!/usr/bin/env bash
+# agentcage: run a coding agent in a disposable, locked-down Alpine Linux VM.
+#
+# Downloads and verifies Alpine's official cloud image, builds a first-boot
+# (cloud-init) config with your SSH key and the agent harness(es) you pick,
+# and boots a hardened VM with libvirt (or QEMU directly).
+# See README.md.
+set -euo pipefail
+
+VERSION=0.1.0
+
+# Find lib/ and share/: next to this script in a checkout, or under
+# PREFIX/lib/agentcage and PREFIX/share/agentcage when installed.
+self=${BASH_SOURCE[0]}
+while [ -L "$self" ]; do
+  target=$(readlink "$self")
+  case "$target" in /*) self=$target ;; *) self=$(dirname "$self")/$target ;; esac
+done
+DIR=$(cd "$(dirname "$self")" && pwd)
+if [ -d "$DIR/lib" ]; then
+  LIB_DIR=$DIR/lib; DATA_DIR=$DIR/share
+else
+  LIB_DIR=$DIR/../lib/agentcage; DATA_DIR=$DIR/../share/agentcage
+fi
+
+for f in common alpine harness share image provision; do
+  # shellcheck source=/dev/null
+  . "$LIB_DIR/$f.sh"
+done
+
+VM=agentcage
+RAM_MB=2048
+VCPUS=2
+DISK_GB=10
+POOL_DIR=""
+GUEST_USER=""
+GUEST_DOAS=1
+GUEST_PW_HASH=""
+ASK_PW=0
+HARNESS=pi
+SHARE_DIR=""
+SSH_PUBKEY=""
+DRY_RUN=${DRY_RUN:-0}
+ASSUME_YES=0
+NO_WAIT=0
+BACKEND=${AGENTCAGE_BACKEND:-libvirt}
+NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; PW_SET=0
+HARNESS_SET=0; SHARE_SET=0
+SSH_ARGS=()
+
+usage() {
+  cat <<EOF
+Usage: acage <command> [name] [options]
+
+Commands:
+  install          Download and verify the image, then create and boot a VM
+  image            Download and verify the latest Alpine cloud image only
+  create           Create and boot a VM from the downloaded image
+  ssh NAME [-- CMD]  Connect to a VM (or run CMD in it)
+  start NAME       Start a stopped VM
+  stop NAME        Shut a VM down
+  console NAME     Show the VM's serial console / boot output
+  list             List VMs
+  delete NAME      Delete a VM and its disk
+
+Options for install/create:
+  --name NAME       VM name, also its hostname and SSH alias (default: $VM)
+  --user NAME       User to create in the VM (default: asked; your username)
+  --harness LIST    Agent harness(es) to install, comma-separated:
+                    pi, claude-code, codex, or none (default: $HARNESS)
+  --share DIR       Share host folder DIR with the VM at ~/shared (created if
+                    missing; asked interactively with the default
+                    /mnt/acage-shared/NAME).
+                    Read the warning it prints: this weakens the isolation.
+  --password        Set a password for the guest user (asked, hidden). doas
+                    then asks for it; without one doas needs no password.
+  --no-doas         Don't give the guest user root
+  --ram MB          RAM in MB (default: $RAM_MB)
+  --vcpus N         vCPUs (default: $VCPUS)
+  --disk GB         Disk size in GB (default: $DISK_GB)
+  --ssh-pubkey FILE Public key to authorize (default: ~/.ssh/id_agentcage.pub,
+                    created if missing)
+  --no-wait         Start the VM and return, without waiting for first boot
+
+General options:
+  --backend NAME    libvirt (default), or qemu to run QEMU directly
+                    without libvirt
+  --pool-dir DIR    Where images and disks are kept
+                    (default: libvirt /var/lib/libvirt/images/agentcage,
+                     qemu ~/.local/share/agentcage)
+  -y, --yes         Don't ask for confirmations (image key fingerprint,
+                    shared-folder warning, delete)
+  -n, --dry-run     Print what would change instead of changing it
+  -h, --help        Show this help
+  --version         Show the version
+
+Settings for install/create that aren't given as options are asked for when
+running in a terminal; otherwise the defaults above are used.
+EOF
+}
+
+cmd=""
+need_value() { [ $# -ge 2 ] || die "$1 needs a value"; }
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --name) need_value "$@"; VM=$2; NAME_SET=1; shift 2 ;;
+    --user) need_value "$@"; GUEST_USER=$2; USER_SET=1; shift 2 ;;
+    --harness) need_value "$@"; HARNESS=$2; HARNESS_SET=1; shift 2 ;;
+    --share) need_value "$@"; SHARE_DIR=$2; SHARE_SET=1; shift 2 ;;
+    --ram) need_value "$@"; RAM_MB=$2; RAM_SET=1; shift 2 ;;
+    --vcpus) need_value "$@"; VCPUS=$2; VCPUS_SET=1; shift 2 ;;
+    --disk) need_value "$@"; DISK_GB=$2; DISK_SET=1; shift 2 ;;
+    --pool-dir) need_value "$@"; POOL_DIR=$2; shift 2 ;;
+    --ssh-pubkey) need_value "$@"; SSH_PUBKEY=$2; KEY_SET=1; shift 2 ;;
+    --backend) need_value "$@"; BACKEND=$2; shift 2 ;;
+    --password) ASK_PW=1; PW_SET=1; shift ;;
+    --doas) GUEST_DOAS=1; DOAS_SET=1; shift ;;
+    --no-doas) GUEST_DOAS=0; DOAS_SET=1; shift ;;
+    --no-wait) NO_WAIT=1; shift ;;
+    -n|--dry-run) DRY_RUN=1; shift ;;
+    -y|--yes) ASSUME_YES=1; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --version) echo "acage $VERSION"; exit 0 ;;
+    --) shift; SSH_ARGS=("$@"); break ;;
+    -*) die "Unknown option: $1 (see acage --help)" ;;
+    *)
+      if [ -z "$cmd" ]; then cmd=$1
+      elif [ "$NAME_SET" = 0 ]; then VM=$1; NAME_SET=1
+      else die "Unexpected argument: $1"
+      fi
+      shift ;;
+  esac
+done
+[ -n "$cmd" ] || { usage; exit 1; }
+[ "$(uname -s)" = Linux ] || die "acage needs a Linux host with KVM"
+
+case "$BACKEND" in
+  libvirt|qemu) ;;
+  *) die "Unknown backend '$BACKEND' (libvirt or qemu)" ;;
+esac
+# shellcheck source=/dev/null
+. "$LIB_DIR/backend-$BACKEND.sh"
+backend_init
+
+check_name() {
+  # A valid hostname label that YAML won't read as a number or boolean.
+  [[ "$VM" =~ ^[a-z][a-z0-9-]{0,62}$ ]] && [[ "$VM" != *- ]] \
+    || die "Invalid VM name '$VM' (lowercase letters, digits and -, starting with a letter)"
+}
+
+# Ask about anything create needs that wasn't given on the command line.
+# Skipped when not running in a terminal (piped input, scripts, CI).
+prompt_settings() {
+  interactive || return 0
+  echo "Settings (press Enter to keep each default):" >&2
+  [ "$NAME_SET" = 1 ]    || ask VM "VM name" "$VM"
+  [ "$USER_SET" = 1 ]    || ask GUEST_USER "User to create in the VM" "${GUEST_USER:-$(id -un | tr 'A-Z' 'a-z')}"
+  [ "$HARNESS_SET" = 1 ] || ask HARNESS "Agent harness(es): pi, claude-code, codex (comma-separated) or none" "$HARNESS"
+  [ "$RAM_SET" = 1 ]     || ask RAM_MB "RAM in MB" "$RAM_MB"
+  [ "$VCPUS_SET" = 1 ]   || ask VCPUS "vCPUs" "$VCPUS"
+  [ "$DISK_SET" = 1 ]    || ask DISK_GB "Disk size in GB" "$DISK_GB"
+  [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_agentcage.pub, created if missing)" "$SSH_PUBKEY"
+  [ "$DOAS_SET" = 1 ]    || { if yesno "Give '$GUEST_USER' root in the VM (doas)?" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
+  [ "$PW_SET" = 1 ]      || { yesno "Set a password for '$GUEST_USER' (doas asks for it; console login)?" n && ASK_PW=1 || true; }
+  if [ "$SHARE_SET" != 1 ] && yesno "Share a host folder with the VM? (weakens isolation; you'll see a warning)" n; then
+    ask SHARE_DIR "Folder to share" "$(share_default_dir "$VM")"
+  fi
+  echo >&2
+}
+
+validate_settings() {
+  check_name
+  is_uint "$RAM_MB" && [ "$RAM_MB" -ge 512 ] || die "--ram must be a whole number of MB, at least 512 (got '$RAM_MB')"
+  is_uint "$VCPUS" && [ "$VCPUS" -le 64 ] || die "--vcpus must be a whole number from 1 to 64 (got '$VCPUS')"
+  is_uint "$DISK_GB" && [ "$DISK_GB" -le 4096 ] || die "--disk must be a whole number of GB (got '$DISK_GB')"
+  SSH_PUBKEY=${SSH_PUBKEY/#\~/$HOME}
+  GUEST_USER=${GUEST_USER:-$(id -un | tr 'A-Z' 'a-z')}
+  harness_validate
+  image_validate
+  [ -z "$SHARE_DIR" ] || share_resolve
+}
+
+cmd_image() {
+  local cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+  mkdir -p "$cache"
+  IMG_TMP=$(mktemp -d "$cache/agentcage-image.XXXXXX")
+  trap 'rm -rf "${IMG_TMP:-}"' EXIT
+  alpine_image_fetch "$IMAGE_ARCH"
+  # Clean up now rather than only on exit: create may end in 'exec ssh',
+  # which would skip the EXIT trap.
+  rm -rf "$IMG_TMP"; IMG_TMP=""
+  trap - EXIT
+}
+
+cmd_create() {
+  if backend_exists "$VM"; then die "VM '$VM' already exists (acage delete $VM)"; fi
+  [ -z "$SHARE_DIR" ] || { share_confirm; share_create; }
+  if [ "$ASK_PW" = 1 ]; then
+    interactive || die "--password needs a terminal to type the password in"
+    ask_password GUEST_PW_HASH "Password for '$GUEST_USER' in the VM"
+  fi
+  [ -f "$HOME/.ssh/known_hosts" ] && run ssh-keygen -R "$VM" >/dev/null 2>&1 || true
+
+  backend_create "$VM"
+
+  if dry; then
+    echo "(dry-run) would then wait for first boot, add an SSH config entry, and offer" >&2
+    echo "(dry-run) to store API keys, make a deploy key and connect." >&2
+    return 0
+  fi
+  if [ "$NO_WAIT" = 1 ]; then
+    image_next_steps
+    return 0
+  fi
+  echo >&2
+  if ! backend_wait "$VM"; then
+    image_next_steps
+    return 1
+  fi
+  if ! provision_vm "$VM" "$GUEST_USER"; then
+    image_next_steps
+    return 1
+  fi
+}
+
+cmd_ssh() {
+  backend_locate "$VM"
+  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
+}
+
+cmd_delete() {
+  backend_exists "$VM" || die "No VM named '$VM'"
+  if [ "$ASSUME_YES" != 1 ]; then
+    interactive || die "Deleting needs confirmation: run interactively or add --yes"
+    yesno "Delete VM '$VM' and its disk? This cannot be undone." n || die "Not deleted"
+  fi
+  backend_delete "$VM"
+  if ! dry; then
+    remove_ssh_config_entry "$VM"
+    [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$VM" >/dev/null 2>&1 || true
+  fi
+  log "Deleted $VM"
+}
+
+need_name() { [ "$NAME_SET" = 1 ] || die "Which VM? acage $cmd NAME"; check_name; }
+
+case "$cmd" in
+  image)
+    cmd_image ;;
+  create|install)
+    prompt_settings
+    validate_settings
+    backend_check_deps
+    [ "$cmd" = create ] || cmd_image
+    cmd_create ;;
+  ssh) need_name; cmd_ssh ;;
+  start) need_name; backend_start "$VM" ;;
+  stop) need_name; backend_stop "$VM" ;;
+  console) need_name; backend_console "$VM" ;;
+  delete) need_name; cmd_delete ;;
+  list) backend_list ;;
+  help) usage ;;
+  *) die "Unknown command: $cmd (see acage --help)" ;;
+esac
