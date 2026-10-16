@@ -19,7 +19,7 @@ harness(es) you pick:
 The agent runs on its own kernel, in its own account. It can't see your files
 (unless you share a folder), your clipboard, your USB devices, your SSH agent,
 your local network or the services on your machine, and it can't become root
-in the VM to change that.
+in the VM to change that. [Security](#security) lists what's in place.
 
 ## Install
 
@@ -121,7 +121,7 @@ already created aren't affected.
 | `--share DIR` | none | Share a host folder at `~/shared` in the VM, created if missing ([read this first](#shared-folder)) |
 | `--password` | off | Set a password for your account ([see below](#accounts-in-the-vm)) |
 | `--no-doas` | off | Don't give your account root either |
-| `--allow-lan` | off | Let the VM reach your local network and this host ([see below](#hardening-and-networking)) |
+| `--allow-lan` | off | Let the VM reach your local network and this host ([see below](#network)) |
 | `--ram MB` | `2048` | At least 512 |
 | `--vcpus N` | `2` | |
 | `--disk GB` | `10` | The image is grown to this size |
@@ -230,13 +230,44 @@ Before an image is used, `image`:
 
 If any step fails, the download is discarded.
 
-## Hardening and networking
+## Security
 
-What agentcage does and doesn't protect against, and what it trusts, is
-spelled out in [SECURITY.md](SECURITY.md).
+agentcage is built to stop a careless, compromised or prompt-injected agent
+from damaging or reading your computer. This section summarizes what it does;
+[SECURITY.md](SECURITY.md) has the full threat model and how to report
+problems.
 
-**Network.** The VM can reach the internet (npm, apk, GitHub, AI APIs), but
-not your local network or this host:
+### What's in place
+
+- **Its own kernel.** The agent runs in a KVM virtual machine, not in a
+  container sharing your kernel.
+- **A verified image.** The Alpine image is checked against Alpine's SHA-512
+  checksum and GPG signature, with the signing key pinned by fingerprint
+  ([details](#image-verification)).
+- **No root for the agent.** It runs in its own `agent` account without
+  `doas`, can't use your account, and can't read your home folder in the VM
+  ([details](#accounts-in-the-vm)).
+- **Internet only.** A firewall in the VM keeps the agent off your local
+  network and away from services on your machine ([details](#network)).
+- **Nothing shared by default.** No folders, clipboard, USB, audio, guest
+  agent, SSH agent or X11. Sharing a folder takes an explicit confirmation,
+  and your home and credential folders are refused.
+- **One-way file transfer.** `acage push` only copies into the VM, never
+  follows symlinks, refuses credential folders and warns about likely
+  secrets. Nothing copies files back out ([details](#moving-files-into-a-vm)).
+- **Locked-down logins.** SSH is key-only for both accounts, root login is
+  disabled, and Alpine's unused default account is removed.
+- **A confined emulator.** With libvirt, QEMU runs as a separate system user
+  (`libvirt-qemu` on Arch and Ubuntu, `qemu` on Fedora; check `user` in
+  `/etc/libvirt/qemu.conf`), confined by AppArmor or SELinux where your
+  distribution uses them.
+- **Safe defaults for your system.** Free-space checks keep VM disks from
+  filling your root partition, and `delete` asks before removing anything.
+
+### Network
+
+The VM can reach the internet (npm, apk, GitHub, AI APIs), but not your local
+network or this host:
 
 | From the VM to | |
 |---|---|
@@ -251,11 +282,12 @@ connections to private, link-local and multicast addresses. Only root in the
 VM can change it, and the agent has no root. `--allow-lan` creates the VM
 without it, if the agent needs something on your network.
 
-**libvirt.** The VM template (`share/domain.xml`) has no shared
-memory (unless you share a folder), no clipboard or guest-agent channel, no
-audio, no USB controller and no VMware backdoor port, and its display doesn't
-listen on the network. QEMU runs as a separate system user, so even an escape
-from the VM wouldn't land in your account.
+### The VM itself
+
+**libvirt.** The VM template (`share/domain.xml`) has no shared memory (unless
+you share a folder), no clipboard or guest-agent channel, no audio, no USB
+controller and no VMware backdoor port, and its display doesn't listen on the
+network.
 
 **`--backend qemu`.** QEMU runs as your user with no display, audio or USB
 devices. SSH reaches the VM through a port on `127.0.0.1` only. QEMU maps your
@@ -263,9 +295,7 @@ host's localhost to `10.0.2.2` in the VM, which the firewall blocks (unless
 `--allow-lan`).
 
 **Both.** The generated SSH config entry sets `ForwardAgent no` and
-`ForwardX11 no`, so your SSH agent and display never reach the VM. Alpine's
-unused default `alpine` account is removed on first boot, so the only logins
-are `agent` and yours.
+`ForwardX11 no`, so your SSH agent and display never reach the VM.
 
 ## Where things are kept
 
