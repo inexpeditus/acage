@@ -5,7 +5,7 @@
 # Sourced by agentcage; every backend defines the same backend_* functions.
 
 backend_init() {
-  POOL_DIR=${POOL_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/agentcage}
+  POOL_DEFAULT=${XDG_DATA_HOME:-$HOME/.local/share}/agentcage
   POOL_ROOT=0
   SHARE_FSTYPE=9p
   case "$(uname -m)" in

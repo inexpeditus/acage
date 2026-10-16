@@ -105,7 +105,7 @@ already created aren't affected.
 | `--ssh-pubkey FILE` | `~/.ssh/id_agentcage.pub` | Key to authorize; the default is generated if missing |
 | `--no-wait` | off | Start the VM and return without waiting for first boot |
 | `--backend NAME` | `libvirt` | `qemu` runs QEMU directly, without libvirt |
-| `--pool-dir DIR` | see below | Where images and disks are kept |
+| `--pool-dir DIR` | [see below](#where-things-are-kept) | Where images and disks are kept; remembered for later commands |
 | `-y`, `--yes` | off | Skip confirmations: image key fingerprint, shared-folder warning, delete |
 | `-n`, `--dry-run` | off | Print what would change instead of doing it |
 
@@ -193,13 +193,28 @@ your SSH agent and display never reach the VM.
 
 | | libvirt | `--backend qemu` |
 |---|---|---|
-| Images and disks | `/var/lib/libvirt/images/agentcage` (root-only) | `~/.local/share/agentcage` |
+| Images and disks | `/var/lib/libvirt/images/agentcage`, or `/home/agentcage` when `/` is a smaller, separate partition (root-only) | `~/.local/share/agentcage` |
 | SSH key | `~/.ssh/id_agentcage` | `~/.ssh/id_agentcage` |
 | SSH config | fenced `# agentcage:begin NAME` block in `~/.ssh/config` | same |
 
 `acage ssh NAME` always looks up the VM's current address. Plain
 `ssh NAME` uses the address saved when the VM was created, which on libvirt
 can change after the VM restarts.
+
+### Disk space
+
+A VM disk starts at about 200 MB but can grow to its full `--disk` size, so
+before downloading or creating anything acage checks that the folder's
+filesystem has that much free. If the folder is on your root filesystem, it
+also insists on 5 GB staying free for the system, because a full `/` breaks
+updates, logging and more.
+
+When you choose a folder (with `--pool-dir` or at the prompt), acage saves it
+in `~/.config/agentcage/config`, and later commands use it. With libvirt the
+folder can't be inside your home folder, because VMs run as a separate system
+user that can't enter it. A folder such as `/home/agentcage` works. On
+Fedora and other SELinux systems, label a folder outside
+`/var/lib/libvirt/images` first (acage prints the command).
 
 ## Troubleshooting
 

@@ -6,7 +6,7 @@
 URI=qemu:///system
 
 backend_init() {
-  POOL_DIR=${POOL_DIR:-/var/lib/libvirt/images/agentcage}
+  POOL_DEFAULT=/var/lib/libvirt/images/agentcage
   POOL_ROOT=1
   SHARE_FSTYPE=virtiofs
   case "$(uname -m)" in
@@ -36,7 +36,7 @@ lv_have_virtiofsd() {
 
 virsh_() {
   case "$1" in
-    dominfo|domstate|domblklist|domifaddr|dumpxml|pool-info|pool-list|list)
+    dominfo|domstate|domblklist|domifaddr|dumpxml|desc|pool-info|pool-list|list)
       if dry; then
         command -v virsh >/dev/null && sudo -n virsh -c "$URI" "$@" 2>/dev/null
       else
@@ -156,21 +156,32 @@ backend_stop() {
   virsh_ destroy "$1"
 }
 
+# Asks libvirt where the VM's files are, so this works whatever the pool was
+# when the VM was created. Only files agentcage made (NAME.qcow2, NAME-seed.iso)
+# are deleted.
 backend_delete() {
-  local vm=$1
+  local vm=$1 files f
   backend_exists "$vm" || die "No VM named '$vm'"
+  [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || die "'$vm' wasn't created by agentcage; not touching it"
+  files=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$1 == "file" && $4 != "-" {print $4}')
   ! backend_running "$vm" || virsh_ destroy "$vm"
   virsh_ undefine "$vm" --nvram
-  prun rm -f "$(lv_disk "$vm")" "$(lv_seed "$vm")"
+  while IFS= read -r f; do
+    case "$f" in
+      */"$vm".qcow2|*/"$vm"-seed.iso) prun rm -f "$f" ;;
+    esac
+  done <<<"$files"
 }
 
 backend_list() {
-  local f vm state
-  printf '%-20s %s\n' NAME STATE
-  for f in $(sudo find "$POOL_DIR" -maxdepth 1 -name '*.qcow2' ! -name 'alpine-cloudimg-*' 2>/dev/null | sort); do
-    vm=$(basename "$f" .qcow2)
+  local vm state disk size
+  printf '%-20s %-12s %s\n' NAME STATE DISK
+  for vm in $(virsh_ list --all --name 2>/dev/null); do
+    [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || continue
     state=$(virsh_ domstate "$vm" 2>/dev/null | head -1)
-    printf '%-20s %s\n' "$vm" "${state:-not defined}"
+    disk=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$3 == "vda" {print $4}')
+    size=$(sudo du -h "$disk" 2>/dev/null | cut -f1)
+    printf '%-20s %-12s %s\n' "$vm" "$state" "$disk${size:+ ($size used)}"
   done
 }
 

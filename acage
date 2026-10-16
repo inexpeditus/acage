@@ -23,7 +23,7 @@ else
   LIB_DIR=$DIR/../lib/agentcage; DATA_DIR=$DIR/../share/agentcage
 fi
 
-for f in common alpine harness share image provision; do
+for f in common pool alpine harness share image provision; do
   # shellcheck source=/dev/null
   . "$LIB_DIR/$f.sh"
 done
@@ -44,7 +44,7 @@ DRY_RUN=${DRY_RUN:-0}
 ASSUME_YES=0
 NO_WAIT=0
 BACKEND=${AGENTCAGE_BACKEND:-libvirt}
-NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; PW_SET=0
+NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; PW_SET=0; POOL_SET=0
 HARNESS_SET=0; SHARE_SET=0
 SSH_ARGS=()
 
@@ -85,9 +85,10 @@ Options for install/create:
 General options:
   --backend NAME    libvirt (default), or qemu to run QEMU directly
                     without libvirt
-  --pool-dir DIR    Where images and disks are kept
-                    (default: libvirt /var/lib/libvirt/images/agentcage,
-                     qemu ~/.local/share/agentcage)
+  --pool-dir DIR    Where images and disks are kept. Remembered for later
+                    commands. Default: libvirt /var/lib/libvirt/images/agentcage
+                    (/home/agentcage if / is a smaller, separate partition),
+                    qemu ~/.local/share/agentcage
   -y, --yes         Don't ask for confirmations (image key fingerprint,
                     shared-folder warning, delete)
   -n, --dry-run     Print what would change instead of changing it
@@ -110,7 +111,7 @@ while [ $# -gt 0 ]; do
     --ram) need_value "$@"; RAM_MB=$2; RAM_SET=1; shift 2 ;;
     --vcpus) need_value "$@"; VCPUS=$2; VCPUS_SET=1; shift 2 ;;
     --disk) need_value "$@"; DISK_GB=$2; DISK_SET=1; shift 2 ;;
-    --pool-dir) need_value "$@"; POOL_DIR=$2; shift 2 ;;
+    --pool-dir) need_value "$@"; POOL_DIR=$2; POOL_SET=1; shift 2 ;;
     --ssh-pubkey) need_value "$@"; SSH_PUBKEY=$2; KEY_SET=1; shift 2 ;;
     --backend) need_value "$@"; BACKEND=$2; shift 2 ;;
     --password) ASK_PW=1; PW_SET=1; shift ;;
@@ -141,6 +142,8 @@ esac
 # shellcheck source=/dev/null
 . "$LIB_DIR/backend-$BACKEND.sh"
 backend_init
+[ "$POOL_SET" = 1 ] || pool_pick_default
+pool_validate
 
 check_name() {
   # A valid hostname label that YAML won't read as a number or boolean.
@@ -159,6 +162,7 @@ prompt_settings() {
   [ "$RAM_SET" = 1 ]     || ask RAM_MB "RAM in MB" "$RAM_MB"
   [ "$VCPUS_SET" = 1 ]   || ask VCPUS "vCPUs" "$VCPUS"
   [ "$DISK_SET" = 1 ]    || ask DISK_GB "Disk size in GB" "$DISK_GB"
+  [ "$POOL_SET" = 1 ]    || ask POOL_DIR "Folder for images and VM disks ($(set -- $(fs_info "$POOL_DIR"); echo "$1 GB free on $2"))" "$POOL_DIR"
   [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_agentcage.pub, created if missing)" "$SSH_PUBKEY"
   [ "$DOAS_SET" = 1 ]    || { if yesno "Give '$GUEST_USER' root in the VM (doas)?" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
   [ "$PW_SET" = 1 ]      || { yesno "Set a password for '$GUEST_USER' (doas asks for it; console login)?" n && ASK_PW=1 || true; }
@@ -178,6 +182,7 @@ validate_settings() {
   harness_validate
   image_validate
   [ -z "$SHARE_DIR" ] || share_resolve
+  pool_validate
 }
 
 cmd_image() {
@@ -246,11 +251,20 @@ need_name() { [ "$NAME_SET" = 1 ] || die "Which VM? acage $cmd NAME"; check_name
 
 case "$cmd" in
   image)
+    check_space 1 "the Alpine image"
+    pool_remember
     cmd_image ;;
   create|install)
     prompt_settings
     validate_settings
     backend_check_deps
+    # A VM disk starts small but can grow to its full --disk size.
+    if [ "$cmd" = install ]; then
+      check_space $((DISK_GB + 1)) "the image and a ${DISK_GB} GB VM disk"
+    else
+      check_space "$DISK_GB" "a ${DISK_GB} GB VM disk"
+    fi
+    pool_remember
     [ "$cmd" = create ] || cmd_image
     cmd_create ;;
   ssh) need_name; cmd_ssh ;;
