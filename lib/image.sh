@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Image verification, disk preparation and the first-boot (cloud-init) seed.
-# Sourced by agentcage.
+# Image verification, the SSH key, disk preparation and the first-boot seed
+# ISO. The seed's contents come from lib/cloudinit.sh. Sourced by acage.
 
 fpr_pretty() { sed -E 's/(.{4})/\1 /g; s/ $//' <<<"$1"; }
 
@@ -52,94 +52,6 @@ image_pubkey_file() {
 # The matching private key: 'ssh -i'/IdentityFile need this, not the .pub file.
 image_privkey_file() { local p; p=$(image_pubkey_file); echo "${p%.pub}"; }
 
-# Validate everything that ends up inside the generated YAML.
-image_validate() {
-  [ -n "$GUEST_USER" ] || die "--user is required (the account to create in the VM)"
-  [[ "$GUEST_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die "Invalid guest user '$GUEST_USER' (lowercase letters, digits, _ and -)"
-  [ "$GUEST_USER" != root ] || die "Choose a regular user, not root"
-}
-
-# cloud-config for the first boot, written to stdout.
-image_userdata() {
-  local key=$1 p h rule uid
-  # Same uid as on the host, so files in a shared folder have the right owner
-  # on both sides. Only for regular host accounts (500 and up).
-  uid=$(id -u)
-  cat <<EOF
-#cloud-config
-hostname: $VM
-manage_etc_hosts: true
-# Alpine's image ships an unused default account, 'alpine' (uid 1000, no
-# password, no keys). Remove it before users are created: it would hold
-# uid 1000, which is usually the host user's uid.
-bootcmd:
-  - "if id alpine >/dev/null 2>&1; then deluser --remove-home alpine; delgroup alpine 2>/dev/null; fi; true"
-users:
-  - name: $GUEST_USER
-EOF
-  [ "$uid" -lt 500 ] || echo "    uid: $uid"
-  cat <<EOF
-    shell: $(alpine_image_shell)
-    groups: [wheel]
-    # Never "locked": a locked account ('!' in shadow) is refused by sshd builds
-    # without PAM (Alpine), even for key logins. '*' matches no password.
-    lock_passwd: false
-    passwd: "${GUEST_PW_HASH:-*}"
-    ssh_authorized_keys:
-      - "$key"
-ssh_pwauth: false
-disable_root: true
-$(alpine_image_cloudinit_extra)
-write_files:
-  - path: /etc/profile.d/agentcage.sh
-    permissions: "0644"
-    content: |
-      export EDITOR=vim
-EOF
-  for h in $(harness_list); do harness_profile_lines "$h" | sed 's/^/      /'; done
-  # Per-user settings such as API keys (written later, mode 600).
-  echo '      [ -r "$HOME/.config/agentcage/env" ] && . "$HOME/.config/agentcage/env"'
-  # Root access: a rule appended to /etc/doas.conf itself (not /etc/doas.d), and
-  # deferred until after the doas package is installed so apk doesn't replace it.
-  # With a password set, doas asks for it ('persist' caches it for a few minutes).
-  # Without one, there is nothing to ask for, so the rule is 'nopass'.
-  if [ "$GUEST_DOAS" = 1 ]; then
-    rule="permit nopass $GUEST_USER"
-    [ -z "$GUEST_PW_HASH" ] || rule="permit persist $GUEST_USER"
-    cat <<EOF
-  - path: /etc/doas.conf
-    owner: root:root
-    permissions: "0600"
-    append: true
-    defer: true
-    content: |
-      $rule
-EOF
-  fi
-  echo "packages:"
-  {
-    alpine_base_packages
-    [ "$GUEST_DOAS" != 1 ] || alpine_doas_packages
-    for h in $(harness_list); do harness_packages "$h"; done
-  } | tr ' ' '\n' | awk 'NF && !seen[$0]++ {print "  - " $0}'
-  cat <<EOF
-runcmd:
-  # Belt-and-suspenders: Alpine's cloud-init does not reliably set the live
-  # hostname, which otherwise shows up as '(none)' in the shell prompt.
-  - hostname $VM
-  - echo $VM >/etc/hostname
-EOF
-  [ -z "$SHARE_DIR" ] || share_guest_runcmd "$GUEST_USER"
-  for h in $(harness_list); do
-    p=$(harness_npm_package "$h")
-    if harness_needs_scripts "$h"; then
-      echo "  - [npm, install, -g, \"$p\"]"
-    else
-      echo "  - [npm, install, -g, --ignore-scripts, \"$p\"]"
-    fi
-  done
-}
-
 # image_prepare_disk DEST -> copies the verified image to DEST and grows it to --disk GB.
 image_prepare_disk() {
   local disk=$1 img vsize
@@ -177,7 +89,7 @@ image_make_seed() {
   if dry; then
     key="$(cat "$pub" 2>/dev/null || echo "ssh-ed25519 AAAA...your-public-key")"
     echo "(dry-run) first-boot config that would go into $dest:" >&2
-    image_userdata "$key" | sed 's/^/    | /' >&2
+    cloudinit_userdata "$key" | sed 's/^/    | /' >&2
     run make_iso "<seed dir>" "$dest"
     return
   fi
@@ -186,7 +98,7 @@ image_make_seed() {
   [[ "$key" =~ ^(ssh-|ecdsa-|sk-)[A-Za-z0-9@.+/=\ _:-]+$ ]] || die "$pub does not look like a single-line SSH public key"
   tmp=$(mktemp -d)
   mkdir "$tmp/seed"
-  image_userdata "$key" >"$tmp/seed/user-data"
+  cloudinit_userdata "$key" >"$tmp/seed/user-data"
   printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$VM" "$(date +%s)" "$VM" >"$tmp/seed/meta-data"
   make_iso "$tmp/seed" "$tmp/seed.iso" || { rm -rf "$tmp"; die "Could not build the seed ISO"; }
   prun install -m 0644 "$tmp/seed.iso" "$dest"

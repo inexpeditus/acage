@@ -264,7 +264,8 @@ and shellcheck.
 | `lib/backend-qemu.sh` | `--backend qemu`: QEMU run directly as your user, with KVM |
 | `lib/pool.sh` | Where images and disks go, free-space checks, saved settings |
 | `lib/alpine.sh` | Alpine specifics: image download, packages, signing key |
-| `lib/image.sh` | Signature checks, disk preparation, cloud-init config and seed ISO |
+| `lib/cloudinit.sh` | The first-boot config: user, root access, packages, agents, shared folder |
+| `lib/image.sh` | Signature checks, SSH key, disk preparation and the seed ISO |
 | `lib/harness.sh` | Agent harnesses: packages, install, API key handling |
 | `lib/share.sh` | Shared folder: checks, warning, guest mount |
 | `lib/provision.sh` | After boot: wait for SSH and cloud-init, SSH config, keys |

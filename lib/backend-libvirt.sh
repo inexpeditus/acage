@@ -60,18 +60,11 @@ lv_seed() { echo "$POOL_DIR/$1-seed.iso"; }
 backend_exists() { virsh_ dominfo "$1" >/dev/null 2>&1; }
 backend_running() { [ "$(virsh_ domstate "$1" 2>/dev/null | head -1)" = running ]; }
 
-backend_create() {
-  local vm=$1 disk seed tmp
-  disk=$(lv_disk "$vm"); seed=$(lv_seed "$vm")
-  pool_ensure
-  if ! dry && pool_exists "$disk"; then die "$disk already exists"; fi
-
-  image_prepare_disk "$disk"
-  image_make_seed "$seed"
-
-  tmp=$(mktemp -d)
-  cp "$DATA_DIR/domain.xml" "$tmp/domain.xml"
-  DISK=$disk VM=$vm RAM_KIB=$((RAM_MB * 1024)) VCPUS=$VCPUS SHARE=$SHARE_DIR SHARE_TAG=$SHARE_TAG perl -0pi -e '
+# lv_render_xml VM DISK -> the domain XML for VM on stdout, from share/domain.xml
+# with this VM's name, memory, vCPUs, disk and (optional) shared folder.
+lv_render_xml() {
+  local vm=$1 disk=$2
+  DISK=$disk VM=$vm RAM_KIB=$((RAM_MB * 1024)) VCPUS=$VCPUS SHARE=$SHARE_DIR SHARE_TAG=$SHARE_TAG perl -0pe '
     sub esc { my $s = shift; $s =~ s/&/&amp;/g; $s =~ s/</&lt;/g; $s =~ s/>/&gt;/g; $s =~ s/"/&quot;/g; $s }
     # Every pattern is anchored to the start of a line, so the header comment
     # is never touched.
@@ -88,7 +81,20 @@ backend_create() {
       s{^\s*<filesystem .*?</filesystem>\n}{}ms;
       s{^\s*<memoryBacking>.*?</memoryBacking>\n}{}ms;
     }
-  ' "$tmp/domain.xml"
+  ' "$DATA_DIR/domain.xml"
+}
+
+backend_create() {
+  local vm=$1 disk seed tmp
+  disk=$(lv_disk "$vm"); seed=$(lv_seed "$vm")
+  pool_ensure
+  if ! dry && pool_exists "$disk"; then die "$disk already exists"; fi
+
+  image_prepare_disk "$disk"
+  image_make_seed "$seed"
+
+  tmp=$(mktemp -d)
+  lv_render_xml "$vm" "$disk" >"$tmp/domain.xml"
 
   log "Defining $vm"
   virsh_ define "$tmp/domain.xml"

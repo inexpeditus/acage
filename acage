@@ -23,7 +23,7 @@ else
   LIB_DIR=$DIR/../lib/agentcage; DATA_DIR=$DIR/../share/agentcage
 fi
 
-for f in common pool alpine harness share image provision; do
+for f in common pool alpine harness share cloudinit image provision; do
   # shellcheck source=/dev/null
   . "$LIB_DIR/$f.sh"
 done
@@ -135,6 +135,16 @@ done
 [ -n "$cmd" ] || { usage; exit 1; }
 [ "$(uname -s)" = Linux ] || die "acage needs a Linux host with KVM"
 
+# Backends (lib/backend-NAME.sh) all define the same functions:
+#   backend_init          set POOL_DEFAULT, POOL_ROOT, IMAGE_ARCH, SHARE_FSTYPE
+#   backend_check_deps    fail early if host tools are missing
+#   pool_ensure, pool_exists FILE
+#   backend_exists VM, backend_running VM
+#   backend_create VM     disk + seed + define + start
+#   backend_wait VM       set SSH_HOST/SSH_PORT once the VM is reachable
+#   backend_locate VM     set SSH_HOST/SSH_PORT for a running VM
+#   backend_start VM, backend_stop VM, backend_delete VM
+#   backend_list, backend_console VM
 case "$BACKEND" in
   libvirt|qemu) ;;
   *) die "Unknown backend '$BACKEND' (libvirt or qemu)" ;;
@@ -180,7 +190,7 @@ validate_settings() {
   SSH_PUBKEY=${SSH_PUBKEY/#\~/$HOME}
   GUEST_USER=${GUEST_USER:-$(id -un | tr 'A-Z' 'a-z')}
   harness_validate
-  image_validate
+  cloudinit_validate
   [ -z "$SHARE_DIR" ] || share_resolve
   pool_validate
 }

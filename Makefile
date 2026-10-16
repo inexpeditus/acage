@@ -13,7 +13,7 @@ DATA = $(DESTDIR)$(PREFIX)/share/agentcage
 DOC = $(DESTDIR)$(PREFIX)/share/doc/agentcage
 LICENSES = $(DESTDIR)$(PREFIX)/share/licenses/agentcage
 
-LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/image.sh \
+LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/cloudinit.sh lib/image.sh \
        lib/provision.sh lib/backend-libvirt.sh lib/backend-qemu.sh
 DATAFILES = share/domain.xml share/image-signing.asc
 
