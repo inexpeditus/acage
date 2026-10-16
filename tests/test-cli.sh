@@ -124,10 +124,24 @@ test_delete_needs_confirmation_then_cleans_up() {
   assert_rc 1; assert_out "Deleting needs confirmation"
   [ -d "$POOL/vms/box" ] || fail "VM was deleted without confirmation"
 
+  mkdir -p "$XDG_CONFIG_HOME/agentcage"
+  printf 'user_box=roy\nuser_other=x\n' >"$XDG_CONFIG_HOME/agentcage/config"
   acage_run delete box --backend qemu --pool-dir "$POOL" -y
   assert_rc 0; assert_out "Deleted box"
+  assert_eq "$(cat "$XDG_CONFIG_HOME/agentcage/config")" "user_other=x"
   [ ! -e "$POOL/vms/box" ] || fail "VM folder still there"
   cmp -s "$HOME/.ssh/config" "$TMP/config.orig" || fail "SSH config not restored: $(cat "$HOME/.ssh/config")"
+}
+
+test_attach_and_ssh_flags() {
+  fake_qemu_vm box
+  acage_run attach box --user --backend qemu --pool-dir "$POOL"
+  assert_rc 1; assert_out "'box' is not running"
+  acage_run ssh box --agent --backend qemu --pool-dir "$POOL" -- true
+  assert_rc 1; assert_out "'box' is not running"
+  # For create, --user still takes a name.
+  acage_run create box --user agent --pool-dir "$POOL" -n
+  assert_rc 1; assert_out "is the agent's account"
 }
 
 test_start_unknown_vm() {

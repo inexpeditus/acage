@@ -26,15 +26,30 @@ test_userdata_defaults() {
   assert_out "deluser --remove-home alpine"
   assert_out "ssh_pwauth: false"
   assert_out '[npm, install, -g, --ignore-scripts, "@earendil-works/pi-coding-agent"]'
-  yaml_check 'd["users"][0]["name"] == "roy" and d["users"][0]["ssh_authorized_keys"] == ["'"$KEY"'"]'
+  yaml_check 'd["users"][1]["name"] == "roy" and d["users"][1]["ssh_authorized_keys"] == ["'"$KEY"'"]'
   yaml_check '{"git","openssh","nodejs","npm","vim","doas"} <= set(d["packages"])'
   yaml_check 'd["disable_root"] is True'
 }
 
-test_userdata_uid_follows_the_host() {
+test_userdata_two_accounts() {
+  load_libs
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_out "  - name: agent"
+  assert_out "  - name: roy"
+  assert_out "chmod 700 /home/roy /home/agent"
+  # Only your account is in wheel and gets doas.
+  [ "$(printf '%s\n' "$OUT" | grep -c 'groups: \[wheel\]')" = 1 ] || fail "wheel listed more than once"
+  assert_not_out "permit nopass agent"
+  yaml_check '[u["name"] for u in d["users"]] == ["agent", "roy"]'
+  yaml_check 'd["users"][1].get("groups") == ["wheel"] and "groups" not in d["users"][0]'
+  yaml_check 'all(u["ssh_authorized_keys"] == ["'"$KEY"'"] for u in d["users"])'
+}
+
+test_userdata_agent_gets_the_host_uid() {
   load_libs
   OUT=$(cloudinit_userdata "$KEY")
   if [ "$(id -u)" -ge 500 ]; then
+    yaml_check 'd["users"][0]["uid"] == '"$(id -u)"' and "uid" not in d["users"][1]'
     assert_out "uid: $(id -u)"
   else
     assert_not_out "uid:"
@@ -77,8 +92,9 @@ test_userdata_with_share() {
   load_libs
   SHARE_DIR=$TMP
   OUT=$(cloudinit_userdata "$KEY")
-  assert_out "mount /home/roy/shared"
-  yaml_check 'any("mount /home/roy/shared" == c for c in d["runcmd"])'
+  assert_out "mount /home/agent/shared"
+  assert_out "chown agent:agent /home/agent/shared"
+  yaml_check 'any("mount /home/agent/shared" == c for c in d["runcmd"])'
 }
 
 test_cloudinit_validate() {
@@ -86,5 +102,6 @@ test_cloudinit_validate() {
   GUEST_USER=""; assert_fails "--user is required" cloudinit_validate
   GUEST_USER=root; assert_fails "not root" cloudinit_validate
   GUEST_USER="a b"; assert_fails "Invalid guest user" cloudinit_validate
+  GUEST_USER=agent; assert_fails "is the agent's account" cloudinit_validate
   GUEST_USER=roy; cloudinit_validate
 }

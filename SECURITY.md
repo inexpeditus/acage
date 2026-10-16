@@ -16,6 +16,8 @@ With the defaults (no shared folder), an agent inside the VM cannot:
 - use your SSH agent or X11 display (the SSH entry sets `ForwardAgent no`
   and `ForwardX11 no`)
 - reach your machine's kernel: the VM runs its own Linux kernel under KVM
+- become root in the VM, use your account there, or read your home folder
+  in it: the agent runs in its own `agent` account, which has no `doas`
 
 Every image is checked against Alpine's published SHA-512 checksum and
 Alpine's GPG signature, with the signing key pinned by fingerprint in
@@ -33,14 +35,17 @@ Alpine's GPG signature, with the signing key pinned by fingerprint in
 
 ## What it does not protect
 
-- **Anything inside the VM.** The agent has full access to the VM, and with
-  the default `doas` setup it is root there. API keys, deploy keys and code
-  you put in the VM are readable by the agent.
+- **Anything in the agent account.** API keys, the deploy key, `~/shared`
+  and any code you give the agent are readable by it, by design.
 - **The network.** The VM can reach the internet and your local network,
   so an agent can send out anything it can read in the VM. With libvirt it
   can also reach services on the host's `virbr0` address; with
   `--backend qemu`, services on the host's loopback interface through
   `10.0.2.2`.
+- **Root in the VM.** The separation between the accounts relies on the
+  agent not getting root. A local privilege escalation bug in the VM's
+  kernel or software, or a mistake in your account (running something the
+  agent wrote with `doas`), would undo it.
 - **A shared folder.** `--share` gives the agent read-write access to that
   folder on your computer. Anything the agent writes there (scripts, build
   files, `.git/hooks`, editor config) runs on your computer when you use
@@ -53,7 +58,8 @@ Alpine's GPG signature, with the signing key pinned by fingerprint in
 
 ## Reducing the risk further
 
-- Use `--no-doas` when the agent doesn't need root in the VM, especially
+- Don't run code the agent wrote from your own account in the VM, least of
+  all with `doas`. Use `--no-doas` if you don't need root there, especially
   with a shared folder on libvirt.
 - Move code with Git instead of a shared folder, and give the VM a
   read-only deploy key unless it must push.

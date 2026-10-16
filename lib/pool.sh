@@ -19,6 +19,15 @@ config_set() {
   mv "$tmp" "$CONFIG_FILE"
 }
 
+# config_unset KEY -> removes KEY from the config file.
+config_unset() {
+  local tmp
+  [ -f "$CONFIG_FILE" ] || return 0
+  tmp=$(mktemp)
+  grep -v "^$1=" "$CONFIG_FILE" >"$tmp" || true
+  mv "$tmp" "$CONFIG_FILE"
+}
+
 # fs_info DIR -> "<free GB> <mount point>" of the filesystem DIR is on (or
 # would be on, if it doesn't exist yet).
 fs_info() {

@@ -67,9 +67,10 @@ test_ssh_config_block_round_trip() {
   printf 'Host a\n  User x\n\n\nHost b\n  User y\n' >"$HOME/.ssh/config"
   cp "$HOME/.ssh/config" "$TMP/orig"
 
-  write_ssh_config_entry vm1 roy 2>/dev/null
-  write_ssh_config_entry vm2 roy 2>/dev/null
-  SSH_HOST=10.0.0.6 write_ssh_config_entry vm1 roy 2>/dev/null
+  write_ssh_config_entry vm1 2>/dev/null
+  write_ssh_config_entry vm2 2>/dev/null
+  SSH_HOST=10.0.0.6 write_ssh_config_entry vm1 2>/dev/null
+  grep -q '^    User agent$' "$HOME/.ssh/config" || fail "plain 'ssh vm1' should log in as agent"
   assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 2
   grep -q 'HostName 10.0.0.6' "$HOME/.ssh/config" || fail "vm1 not updated"
   assert_eq "$(stat -c %a "$HOME/.ssh/config")" 600
@@ -87,7 +88,7 @@ test_ssh_config_leaves_foreign_entries_alone() {
   SSH_HOST=10.0.0.5 SSH_PORT=22
   mkdir -p "$HOME/.ssh"
   printf 'Host box\n  User mine\n' >"$HOME/.ssh/config"
-  OUT=$(write_ssh_config_entry box roy 2>&1)
+  OUT=$(write_ssh_config_entry box 2>&1)
   assert_out "already has its own 'Host box' entry"
   assert_eq "$(cat "$HOME/.ssh/config")" "$(printf 'Host box\n  User mine')"
 }

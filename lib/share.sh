@@ -68,10 +68,10 @@ share_confirm() {
 EOF
     if [ "$BACKEND" = libvirt ] && [ "$GUEST_DOAS" = 1 ]; then
       cat <<EOF
-   - The agent has root in the VM, and libvirt serves the folder through a
-     root process on the host. Root in the VM can therefore create files in
-     it that are owned by root on your host, including setuid programs.
-     Create the VM with --no-doas if you don't need root inside it.
+   - libvirt serves the folder through a root process on the host, so root
+     in the VM can create files in it that are owned by root on your host,
+     including setuid programs. The agent account has no root, but your
+     account does: create the VM with --no-doas if you don't need it.
 EOF
     fi
     cat <<EOF

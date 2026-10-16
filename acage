@@ -39,6 +39,7 @@ GUEST_PW_HASH=""
 ASK_PW=0
 HARNESS=pi
 SHARE_DIR=""
+WHO=""
 SSH_PUBKEY=""
 DRY_RUN=${DRY_RUN:-0}
 ASSUME_YES=0
@@ -56,31 +57,39 @@ Commands:
   install          Download and verify the image, then create and boot a VM
   image            Download and verify the latest Alpine cloud image only
   create           Create and boot a VM from the downloaded image
-  ssh NAME [-- CMD]  Connect to a VM (or run CMD in it)
+  attach NAME      Log in to a VM, asking whether as the agent or as you
+  ssh NAME [-- CMD]  Run CMD in a VM (as the agent unless --user)
   start NAME       Start a stopped VM
   stop NAME        Shut a VM down
   console NAME     Show the VM's serial console / boot output
   list             List VMs
   delete NAME      Delete a VM and its disk
 
+Every VM has two accounts: 'agent', which runs the AI and has no root, and
+yours, which can use doas.
+
 Options for install/create:
   --name NAME       VM name, also its hostname and SSH alias (default: $VM)
-  --user NAME       User to create in the VM (default: asked; your username)
+  --user NAME       Your account in the VM (default: your username)
   --harness LIST    Agent harness(es) to install, comma-separated:
                     pi, claude-code, codex, or none (default: $HARNESS)
   --share DIR       Share host folder DIR with the VM at ~/shared (created if
                     missing; asked interactively with the default
                     /mnt/acage-shared/NAME).
                     Read the warning it prints: this weakens the isolation.
-  --password        Set a password for the guest user (asked, hidden). doas
+  --password        Set a password for your account (asked, hidden). doas
                     then asks for it; without one doas needs no password.
-  --no-doas         Don't give the guest user root
+  --no-doas         Don't give your account root either
   --ram MB          RAM in MB (default: $RAM_MB)
   --vcpus N         vCPUs (default: $VCPUS)
   --disk GB         Disk size in GB (default: $DISK_GB)
   --ssh-pubkey FILE Public key to authorize (default: ~/.ssh/id_agentcage.pub,
                     created if missing)
   --no-wait         Start the VM and return, without waiting for first boot
+
+Options for attach/ssh:
+  --agent, --user   Log in as the agent (ssh's default) or as you, without
+                    being asked
 
 General options:
   --backend NAME    libvirt (default), or qemu to run QEMU directly
@@ -105,7 +114,13 @@ need_value() { [ $# -ge 2 ] || die "$1 needs a value"; }
 while [ $# -gt 0 ]; do
   case "$1" in
     --name) need_value "$@"; VM=$2; NAME_SET=1; shift 2 ;;
-    --user) need_value "$@"; GUEST_USER=$2; USER_SET=1; shift 2 ;;
+    --user)
+      # A flag for attach/ssh, a name for create/install.
+      case "$cmd" in
+        attach|ssh) WHO=user; shift ;;
+        *) need_value "$@"; GUEST_USER=$2; USER_SET=1; shift 2 ;;
+      esac ;;
+    --agent) WHO=agent; shift ;;
     --harness) need_value "$@"; HARNESS=$2; HARNESS_SET=1; shift 2 ;;
     --share) need_value "$@"; SHARE_DIR=$2; SHARE_SET=1; shift 2 ;;
     --ram) need_value "$@"; RAM_MB=$2; RAM_SET=1; shift 2 ;;
@@ -167,14 +182,14 @@ prompt_settings() {
   interactive || return 0
   echo "Settings (press Enter to keep each default):" >&2
   [ "$NAME_SET" = 1 ]    || ask VM "VM name" "$VM"
-  [ "$USER_SET" = 1 ]    || ask GUEST_USER "User to create in the VM" "${GUEST_USER:-$(id -un | tr 'A-Z' 'a-z')}"
+  [ "$USER_SET" = 1 ]    || ask GUEST_USER "Your account in the VM (the agent gets its own, 'agent')" "${GUEST_USER:-$(id -un | tr 'A-Z' 'a-z')}"
   [ "$HARNESS_SET" = 1 ] || ask HARNESS "Agent harness(es): pi, claude-code, codex (comma-separated) or none" "$HARNESS"
   [ "$RAM_SET" = 1 ]     || ask RAM_MB "RAM in MB" "$RAM_MB"
   [ "$VCPUS_SET" = 1 ]   || ask VCPUS "vCPUs" "$VCPUS"
   [ "$DISK_SET" = 1 ]    || ask DISK_GB "Disk size in GB" "$DISK_GB"
   [ "$POOL_SET" = 1 ]    || ask POOL_DIR "Folder for images and VM disks ($(set -- $(fs_info "$POOL_DIR"); echo "$1 GB free on $2"))" "$POOL_DIR"
   [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_agentcage.pub, created if missing)" "$SSH_PUBKEY"
-  [ "$DOAS_SET" = 1 ]    || { if yesno "Give '$GUEST_USER' root in the VM (doas)?" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
+  [ "$DOAS_SET" = 1 ]    || { if yesno "Give your account '$GUEST_USER' root in the VM (doas)? The agent never gets it" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
   [ "$PW_SET" = 1 ]      || { yesno "Set a password for '$GUEST_USER' (doas asks for it; console login)?" n && ASK_PW=1 || true; }
   if [ "$SHARE_SET" != 1 ] && yesno "Share a host folder with the VM? (weakens isolation; you'll see a warning)" n; then
     ask SHARE_DIR "Folder to share" "$(share_default_dir "$VM")"
@@ -239,8 +254,15 @@ cmd_create() {
 }
 
 cmd_ssh() {
+  local user=$AGENT_USER
   backend_locate "$VM"
-  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
+  [ "$WHO" != user ] || user=$(vm_user "$VM")
+  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
+}
+
+cmd_attach() {
+  backend_locate "$VM"
+  attach "$VM" "$WHO"
 }
 
 cmd_delete() {
@@ -252,6 +274,7 @@ cmd_delete() {
   backend_delete "$VM"
   if ! dry; then
     remove_ssh_config_entry "$VM"
+    config_unset "user_$VM"
     [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$VM" >/dev/null 2>&1 || true
   fi
   log "Deleted $VM"
@@ -277,6 +300,7 @@ case "$cmd" in
     pool_remember
     [ "$cmd" = create ] || cmd_image
     cmd_create ;;
+  attach) need_name; cmd_attach ;;
   ssh) need_name; cmd_ssh ;;
   start) need_name; backend_start "$VM" ;;
   stop) need_name; backend_stop "$VM" ;;

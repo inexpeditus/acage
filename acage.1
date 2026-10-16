@@ -25,8 +25,13 @@
 .Cm image
 .Op Fl ny
 .Nm
+.Cm attach
+.Ar name
+.Op Fl -agent | Fl -user
+.Nm
 .Cm ssh
 .Ar name
+.Op Fl -agent | Fl -user
 .Op Fl - Ar command ...
 .Nm
 .Cm start | stop | console | delete
@@ -39,10 +44,15 @@
 downloads Alpine Linux's official cloud image, verifies its checksum and
 signature, and boots a virtual machine from it in which a coding agent can
 run with its own kernel, away from the host.
-On first boot the machine creates a user with the given SSH key, gives that
-user root through
-.Xr doas 1 ,
-and installs
+On first boot the machine creates two accounts that both accept the given
+SSH key:
+.Ql agent ,
+which runs the AI and has no root, and one for the invoking user, which gets
+root through
+.Xr doas 1 .
+The agent cannot run anything as the other account and neither can read the
+other's home directory.
+The machine also installs
 .Xr git 1 ,
 .Xr vim 1 ,
 Node.js and the chosen agent harnesses.
@@ -79,10 +89,22 @@ entry to
 .Pa ~/.ssh/config ,
 and, when run from a terminal, offers to store API keys in the machine,
 to generate a GitHub deploy key in it, and to connect.
+.It Cm attach Ar name
+Log in to the machine at its current address, asking whether as
+.Ql agent
+or as the invoking user's account, unless
+.Fl -agent
+or
+.Fl -user
+is given.
 .It Cm ssh Ar name Op Fl - Ar command ...
-Connect to the machine at its current address, or run
+Log in as
+.Ql agent ,
+or as the invoking user's account with
+.Fl -user ,
+and run
 .Ar command
-in it.
+if given.
 .It Cm start Ar name
 Start a stopped machine.
 .It Cm stop Ar name
@@ -113,6 +135,14 @@ otherwise the defaults below are used.
 .Pp
 The options are as follows:
 .Bl -tag -width Ds
+.It Fl -agent , Fl -user
+With
+.Cm attach
+and
+.Cm ssh :
+log in as
+.Ql agent
+or as the invoking user's account.
 .It Fl -backend Ar backend
 .Cm libvirt
 .Pq the default
@@ -144,9 +174,10 @@ The default is
 .It Fl n , Fl -dry-run
 Print what would be changed instead of changing it.
 .It Fl -no-doas
-Do not give the guest user root.
+Do not give the invoking user's account root either, so nobody in the
+machine can become root.
 .It Fl -password
-Ask for a password for the guest user.
+Ask for a password for the invoking user's account.
 Only its SHA-512 crypt hash is put in the machine.
 .Xr doas 1
 then asks for it, and it works for console login and
@@ -176,7 +207,9 @@ Make
 .Ar dir
 appear read-write as
 .Pa ~/shared
-in the machine.
+in the
+.Ql agent
+account, which gets the invoking user's uid.
 .Nm
 prints what this exposes and asks for
 .Ql share
@@ -195,7 +228,12 @@ The default is
 .Pa ~/.ssh/id_agentcage.pub ,
 generated if missing.
 .It Fl -user Ar user
-User to create in the machine.
+With
+.Cm install
+and
+.Cm create :
+name of the invoking user's account in the machine; anything but
+.Ql agent .
 The default is the invoking user's name.
 .It Fl -vcpus Ar N
 Number of virtual CPUs.
@@ -251,9 +289,13 @@ also fails when the machine never becomes reachable over SSH.
 Create a machine with Claude Code and connect to it:
 .Pp
 .Dl $ acage install mybox --harness claude-code
-.Dl $ acage ssh mybox
+.Dl $ acage attach mybox
 .Pp
-Run a command in it and copy the output to the host clipboard:
+Install a package as yourself, since the agent has no root:
+.Pp
+.Dl $ acage ssh mybox --user -- doas apk add neovim
+.Pp
+Run a command as the agent and copy the output to the host clipboard:
 .Pp
 .Dl $ acage ssh mybox -- cat '~/notes.md' | wl-copy
 .Pp
@@ -276,7 +318,8 @@ An agent can send anything it can read inside the machine to the network.
 A shared directory is fully readable and writable by the agent, and files
 written there are on the host.
 With libvirt it is served by a process running as root, so root in the
-machine can create root-owned and setuid files in it.
+machine, which the agent does not have, can create root-owned and setuid
+files in it.
 .Pp
 Agent packages are installed from npm at their latest versions on first
 boot.

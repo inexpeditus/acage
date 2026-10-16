@@ -69,11 +69,12 @@ remove_ssh_config_entry() {
   rm -f "$tmp"
 }
 
-# write_ssh_config_entry VM USER -> ~/.ssh/config entry keyed by HostKeyAlias,
+# write_ssh_config_entry VM -> ~/.ssh/config entry keyed by HostKeyAlias,
 # so the host key stays valid even when the VM's address changes.
-# 'acage ssh VM' always passes the current address.
+# 'ssh VM' logs in as the agent and 'ssh you@VM' as you; 'acage attach VM'
+# and 'acage ssh VM' always pass the current address.
 write_ssh_config_entry() {
-  local vm=$1 user=$2 cfg="$HOME/.ssh/config" key
+  local vm=$1 cfg="$HOME/.ssh/config" key
   key=$(image_privkey_file)
   mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
   remove_ssh_config_entry "$vm"
@@ -87,7 +88,7 @@ $(ssh_marker_begin "$vm")
 Host $vm
     HostName $SSH_HOST
     Port $SSH_PORT
-    User $user
+    User $AGENT_USER
     IdentityFile $key
     IdentitiesOnly yes
     HostKeyAlias $vm
@@ -99,11 +100,42 @@ EOF
   log "Added 'Host $vm' to $cfg"
 }
 
-# vm_ssh VM ARGS... -> ssh through the config entry, with the current address.
+# vm_ssh VM USER ARGS... -> ssh as USER through the config entry, with the
+# current address.
 vm_ssh() {
-  local vm=$1; shift
+  local vm=$1 user=$2; shift 2
   ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o HostKeyAlias="$vm" \
-      -o StrictHostKeyChecking=accept-new "$vm" "$@"
+      -o StrictHostKeyChecking=accept-new -o "User=$user" "$vm" "$@"
+}
+
+# vm_user VM -> your account's name in VM, as saved when it was created.
+vm_user() {
+  local u
+  u=$(config_get "user_$1")
+  echo "${u:-$(id -un | tr 'A-Z' 'a-z')}"
+}
+
+# attach VM [agent|user] -> interactive login, asking which account if not given.
+attach() {
+  local vm=$1 who=${2:-} user c=""
+  user=$(vm_user "$vm")
+  if [ -z "$who" ]; then
+    if interactive; then
+      {
+        echo "Attach to $vm as:"
+        echo "  1) $AGENT_USER  (runs the AI, no root)"
+        echo "  2) $user  (you, can use doas)"
+      } >&2
+      read -rp "Choice [1]: " c || true
+    fi
+    case "${c:-1}" in
+      1|"$AGENT_USER") who=agent ;;
+      2|"$user") who=user ;;
+      *) die "Pick 1 or 2" ;;
+    esac
+  fi
+  [ "$who" = user ] || user=$AGENT_USER
+  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" "$vm"
 }
 
 # provision_api_keys VM -> asks once per provider and stores the key for each harness.
@@ -125,8 +157,8 @@ provision_api_keys() {
     fi
     for h in $(harness_list); do
       [ "$(harness_provider "$h")" = "$prov" ] || continue
-      if printf '%s\n' "$key" | vm_ssh "$vm" "$(harness_store_key_script "$h")"; then
-        log "Stored the $label for $h in the VM (readable only by your user there)"
+      if printf '%s\n' "$key" | vm_ssh "$vm" "$AGENT_USER" "$(harness_store_key_script "$h")"; then
+        log "Stored the $label for $h in the VM's $AGENT_USER account (readable only there)"
       else
         warn "Could not store the key for $h"
       fi
@@ -148,18 +180,22 @@ provision_vm() {
   ssh_probe "$vm" "$user" 'cloud-init status --wait' >/dev/null || rc=$?
   [ "$rc" != 1 ] || warn "First-boot setup failed; look at /var/log/cloud-init-output.log in the VM."
 
-  write_ssh_config_entry "$vm" "$user"
+  write_ssh_config_entry "$vm"
+  config_set "user_$vm" "$user"
 
   # First connection that records a host key: by now cloud-init (and any host-key
   # regeneration it does) has finished, so the key is final.
-  vm_ssh "$vm" true || return 1
-  [ "$GUEST_DOAS" != 1 ] || vm_ssh "$vm" 'doas -n true' 2>/dev/null \
+  vm_ssh "$vm" "$user" true || return 1
+  vm_ssh "$vm" "$AGENT_USER" true || { warn "Can't log in as '$AGENT_USER'; see /var/log/cloud-init-output.log in the VM."; return 1; }
+  [ "$GUEST_DOAS" != 1 ] || vm_ssh "$vm" "$user" 'doas -n true' 2>/dev/null \
     || [ -n "$GUEST_PW_HASH" ] || warn "doas does not work for '$user'; see /var/log/cloud-init-output.log in the VM."
-  [ -z "$SHARE_DIR" ] || vm_ssh "$vm" 'mountpoint -q "$HOME/shared"' \
+  ! vm_ssh "$vm" "$AGENT_USER" 'doas -n true' 2>/dev/null \
+    || warn "The '$AGENT_USER' account can use doas; it shouldn't."
+  [ -z "$SHARE_DIR" ] || vm_ssh "$vm" "$AGENT_USER" 'mountpoint -q "$HOME/shared"' \
     || warn "The shared folder is not mounted at ~/shared; see /var/log/cloud-init-output.log in the VM."
   for h in $(harness_list); do
     c=$(harness_command "$h")
-    if v=$(vm_ssh "$vm" "sh -lc '$c --version'" 2>/dev/null); then
+    if v=$(vm_ssh "$vm" "$AGENT_USER" "sh -lc '$c --version'" 2>/dev/null); then
       log "$h: $v"
     else
       warn "$h ('$c') is not working; check /var/log/cloud-init-output.log in the VM."
@@ -174,13 +210,13 @@ provision_vm() {
 
   provision_api_keys "$vm"
 
-  if yesno "Generate a GitHub deploy key in the VM?" y; then
+  if yesno "Generate a GitHub deploy key for the $AGENT_USER account?" y; then
     echo "Add this key on GitHub (repo -> Settings -> Deploy keys; read-only unless the agent must push):" >&2
-    vm_ssh "$vm" 'mkdir -p ~/.ssh; chmod 700 ~/.ssh; [ -f ~/.ssh/id_agent ] || ssh-keygen -q -t ed25519 -f ~/.ssh/id_agent -C agentcage -N ""; grep -q "^Host github.com$" ~/.ssh/config 2>/dev/null || printf "Host github.com\n    IdentityFile ~/.ssh/id_agent\n    IdentitiesOnly yes\n" >>~/.ssh/config; chmod 600 ~/.ssh/config; cat ~/.ssh/id_agent.pub'
+    vm_ssh "$vm" "$AGENT_USER" 'mkdir -p ~/.ssh; chmod 700 ~/.ssh; [ -f ~/.ssh/id_agent ] || ssh-keygen -q -t ed25519 -f ~/.ssh/id_agent -C agentcage -N ""; grep -q "^Host github.com$" ~/.ssh/config 2>/dev/null || printf "Host github.com\n    IdentityFile ~/.ssh/id_agent\n    IdentitiesOnly yes\n" >>~/.ssh/config; chmod 600 ~/.ssh/config; cat ~/.ssh/id_agent.pub'
   fi
 
   if yesno "Connect now?" y; then
-    exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" "$vm"
+    attach "$vm"
   fi
   image_next_steps
 }
@@ -189,10 +225,10 @@ image_next_steps() {
   local h
   {
     echo "Next steps:"
-    echo "  Connect:          acage ssh $VM"
+    echo "  Connect:          acage attach $VM   (asks: $AGENT_USER or $GUEST_USER)"
     echo "  Stop / start:     acage stop $VM / acage start $VM"
     echo "  Boot log:         acage console $VM"
     for h in $(harness_list); do echo "  $(harness_login_hint "$h")"; done
-    [ -z "$SHARE_DIR" ] || echo "  Shared folder:    $SHARE_DIR  <->  ~/shared in the VM"
+    [ -z "$SHARE_DIR" ] || echo "  Shared folder:    $SHARE_DIR  <->  ~/shared for $AGENT_USER"
   } >&2
 }

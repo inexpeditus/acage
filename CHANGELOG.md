@@ -16,8 +16,10 @@ First release, planned as 0.1.0.
   checksum and Alpine's pinned GPG signing key.
 - Agent harnesses: Pi, Claude Code and Codex (`--harness`), with API keys
   stored in the VM over SSH.
-- Root in the VM through `doas`, optionally behind a password
-  (`--password`), or none at all (`--no-doas`).
+- Two accounts in every VM: `agent`, which runs the AI and has no root, and
+  yours, with root through `doas` (optionally behind a password with
+  `--password`, or none with `--no-doas`). `acage attach` asks which one to
+  log in as.
 - libvirt backend with a hardened domain template, and a `qemu` backend
   that runs QEMU directly without libvirt.
 - Optional shared folder (`--share`) with a confirmation warning, refusal

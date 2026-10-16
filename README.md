@@ -4,9 +4,10 @@ Run a coding agent in a disposable, locked-down VM instead of on your own
 machine.
 
 agentcage (command: `acage`) downloads Alpine Linux's official cloud image,
-verifies it, and boots a hardened VM from it. On first boot the VM creates a
-user with your SSH key, gives that user root through `doas`, and installs
-`git`, `vim`, Node.js and the agent harness(es) you pick:
+verifies it, and boots a hardened VM from it. On first boot the VM creates two
+accounts that both accept your SSH key, `agent` for the AI (no root) and one
+for you (root through `doas`), and installs `git`, `vim`, Node.js and the
+agent harness(es) you pick:
 
 | Harness | Installs | Logs in with |
 |---|---|---|
@@ -14,9 +15,9 @@ user with your SSH key, gives that user root through `doas`, and installs
 | `claude-code` | [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code) | Claude account or Anthropic API key |
 | `codex` | [Codex CLI](https://www.npmjs.com/package/@openai/codex) | ChatGPT account or OpenAI API key |
 
-The agent runs on its own kernel and can do whatever it likes inside the VM.
-It can't see your files (unless you share a folder), your clipboard, your USB
-devices or your SSH agent.
+The agent runs on its own kernel, in its own account. It can't see your files
+(unless you share a folder), your clipboard, your USB devices or your SSH
+agent, and it can't become root in the VM.
 
 ## Install
 
@@ -62,17 +63,28 @@ This downloads and verifies the image, creates the VM, waits for first boot to
 finish, checks that the agent runs, and then:
 
 1. adds a `Host mybox` entry to `~/.ssh/config`
-2. offers to store an API key for each harness inside the VM (it goes over
-   SSH; nothing is written to disk on the host)
-3. offers to generate a GitHub deploy key inside the VM and prints the public
-   half for you to add to your repo
+2. offers to store an API key for each harness in the `agent` account (it
+   goes over SSH; nothing is written to disk on the host)
+3. offers to generate a GitHub deploy key for the `agent` account and prints
+   the public half for you to add to your repo
 4. offers to connect
 
 After that:
 
 ```bash
-acage ssh mybox
+acage attach mybox
 ```
+
+```
+Attach to mybox as:
+  1) agent  (runs the AI, no root)
+  2) roy  (you, can use doas)
+Choice [1]:
+```
+
+`--agent` or `--user` skips the question. Run the AI as `agent`, and install
+software as yourself (`doas apk add …`). Plain `ssh mybox` logs in as `agent`,
+and `ssh roy@mybox` as you.
 
 Any setting you don't pass as an option is asked for interactively. When
 `acage` isn't run from a terminal (piped or scripted), it uses the options
@@ -86,7 +98,8 @@ steps.
 | `install [NAME]` | `image`, then `create` |
 | `image` | Download the latest Alpine cloud image and verify it |
 | `create [NAME]` | Create and boot a VM from the downloaded image |
-| `ssh NAME [-- CMD]` | Connect to a VM, or run `CMD` in it |
+| `attach NAME` | Log in, choosing the `agent` account or yours (`--agent` / `--user` to skip the question) |
+| `ssh NAME [-- CMD]` | Run `CMD` in a VM, as `agent` (or as you with `--user`) |
 | `start NAME` / `stop NAME` | Start or shut down a VM |
 | `console NAME` | Serial console (libvirt) or boot output (`--backend qemu`) |
 | `list` | List the VMs agentcage created |
@@ -100,11 +113,11 @@ already created aren't affected.
 | Option | Default | |
 |---|---|---|
 | `--name NAME` | `agentcage` | VM name; also its hostname and SSH alias. Can be given as `NAME` after the command instead |
-| `--user NAME` | your username | User to create in the VM |
+| `--user NAME` | your username | Your account in the VM (anything but `agent`) |
 | `--harness LIST` | `pi` | `pi`, `claude-code`, `codex`, comma-separated, or `none` |
 | `--share DIR` | none | Share a host folder at `~/shared` in the VM, created if missing ([read this first](#shared-folder)) |
-| `--password` | off | Set a password for the guest user ([see below](#root-inside-the-vm)) |
-| `--no-doas` | off | Don't give the guest user root |
+| `--password` | off | Set a password for your account ([see below](#accounts-in-the-vm)) |
+| `--no-doas` | off | Don't give your account root either |
 | `--ram MB` | `2048` | At least 512 |
 | `--vcpus N` | `2` | |
 | `--disk GB` | `10` | The image is grown to this size |
@@ -116,21 +129,32 @@ already created aren't affected.
 | `-n`, `--dry-run` | off | Print what would change instead of doing it |
 | `-h`, `--help` / `--version` | | |
 
-## Root inside the VM
+## Accounts in the VM
 
-The guest user gets root through `doas`:
+| | `agent` | Your account (e.g. `roy`) |
+|---|---|---|
+| Runs | the AI | you |
+| Root (`doas`) | never | yes, unless `--no-doas` |
+| Holds | API keys, deploy key, `~/shared` | whatever you put there |
+| Can see the other's home | no | no |
+
+The agent can't run anything as you, so it can't use your `doas`, and without
+root it can't change the system. When it needs
+a package, it has to ask you:
 
 ```sh
+acage attach mybox --user
 doas apk add neovim
 ```
 
-- **Default:** the account has no password, so `doas` doesn't ask for one.
+- **Default:** your account has no password, so `doas` doesn't ask for one.
+  That's safe because the agent has no way into your account.
 - **`--password`:** you type a password on the host. Only its SHA-512 hash goes
   into the VM. `doas` then asks for it (and remembers it for a few minutes),
   and it also works for console login and `su`.
-- **`--no-doas`:** the user has no way to become root.
+- **`--no-doas`:** nobody in the VM can become root.
 
-SSH login is key-only in every case, and direct root login is disabled.
+SSH login is key-only for both accounts, and direct root login is disabled.
 
 ## Shared folder
 
@@ -138,8 +162,8 @@ SSH login is key-only in every case, and direct root login is disabled.
 read-write, on both sides at once. When you're asked interactively, the
 suggested folder is `/mnt/acage-shared/NAME`. A folder that doesn't exist yet
 is created, owned by you, after you've confirmed the warning below (using
-`sudo` under `/mnt`). The guest user gets the same uid as you, so files have
-the same owner on both sides.
+`sudo` under `/mnt`). The folder belongs to the `agent` account, which gets the
+same uid as you, so files have the same owner on both sides.
 
 It's convenient for working on a repo with an agent, but **it weakens the
 isolation agentcage exists to provide**:
@@ -151,10 +175,10 @@ isolation agentcage exists to provide**:
   scripts, binaries, Makefiles, `package.json` scripts, `.git/hooks`, editor
   and direnv config. Review changes before you do any of that.
 - **libvirt:** the folder is served by a root process on the host
-  (virtiofsd). Root in the VM can therefore create root-owned files in it,
-  including setuid programs. Use `--no-doas` if the agent doesn't need root.
-  With `--backend qemu`, QEMU runs as your user, so files are always created
-  as you.
+  (virtiofsd), so root in the VM can create root-owned files in it, including
+  setuid programs. The agent has no root, but your account does: use
+  `--no-doas` if you don't need it. With `--backend qemu`, QEMU runs as your
+  user, so files are always created as you.
 - Commit and push anything you can't afford to lose first: the agent can
   rewrite or delete Git history too.
 
@@ -201,8 +225,8 @@ while a VM is up.
 
 **Both.** The generated SSH config entry sets `ForwardAgent no` and
 `ForwardX11 no`, so your SSH agent and display never reach the VM. Alpine's
-unused default `alpine` account is removed on first boot, so your user is the
-only login.
+unused default `alpine` account is removed on first boot, so the only logins
+are `agent` and yours.
 
 ## Where things are kept
 
@@ -213,9 +237,9 @@ only login.
 | SSH config | fenced `# agentcage:begin NAME` block in `~/.ssh/config` | same |
 | Settings | `~/.config/agentcage/config` | same |
 
-Inside the VM, API keys are stored readable only by your user: Pi's in
-`~/.pi/agent/auth.json`, Claude Code's in `~/.config/agentcage/env`, and
-Codex's by `codex login` in `~/.codex`.
+Inside the VM, API keys are stored in the `agent` account, readable only
+there: Pi's in `~/.pi/agent/auth.json`, Claude Code's in
+`~/.config/agentcage/env`, and Codex's by `codex login` in `~/.codex`.
 
 `acage ssh NAME` always looks up the VM's current address. Plain
 `ssh NAME` uses the address saved when the VM was created, which on libvirt
@@ -247,8 +271,11 @@ Fedora and other SELinux systems, label a folder outside
   and `/var/log/cloud-init-output.log` shows what happened.
 - **SSH refuses your key.** First-boot setup probably failed. Look at the boot
   output: `acage console NAME`.
-- **`doas: Operation not permitted`.** The VM was created with `--no-doas`, or
-  by an older version of agentcage. Recreate it.
+- **`doas: Operation not permitted` as `agent`.** That's intended: the agent
+  has no root. Log in as yourself (`acage attach NAME --user`) to install
+  things.
+- **`doas: Operation not permitted` in your account.** The VM was created
+  with `--no-doas`, or by an older version of agentcage. Recreate it.
 
 ## Packaging
 
