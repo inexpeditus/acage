@@ -1,0 +1,24 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install test tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q shellcheck python3-yaml libxml2-utils mandoc
+      - name: Lint
+        run: make check
+      - name: Test
+        run: make test
