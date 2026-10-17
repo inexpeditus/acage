@@ -6,13 +6,13 @@ pkgdesc="Run AI coding agents in disposable, locked-down Alpine Linux VMs"
 arch=('any')
 url="https://github.com/inexpeditus/acage"
 license=('MIT')
-depends=('bash' 'coreutils' 'curl' 'gnupg' 'openssh' 'perl' 'libisoburn' 'qemu-base' 'edk2-ovmf')
+depends=('bash' 'coreutils' 'curl' 'gnupg' 'openssh' 'libisoburn' 'qemu-base' 'edk2-ovmf')
 optdepends=(
   'libvirt: the default backend (otherwise use --backend qemu)'
-  'dnsmasq: networking for the libvirt backend'
+  'perl: the libvirt backend (renders the domain XML)'
   'sudo: the libvirt backend runs virsh through sudo'
-  'virtiofsd: shared folders (--share) with the libvirt backend'
   'openssl: setting a password for your account in the VM (--password)'
+  'openbsd-netcat: clean shutdown with --backend qemu (else the VM is terminated)'
 )
 checkdepends=('util-linux')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/inexpeditus/acage/archive/refs/tags/v$pkgver.tar.gz")
