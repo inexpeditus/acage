@@ -25,7 +25,14 @@ in the VM to change that. [Security](#security) lists what's in place.
 
 You need a Linux host with KVM. The default libvirt backend runs x86_64 VMs.
 
-From a checkout, run `./acage` directly, or install it:
+On Arch, build and install the package from
+[`packaging/arch`](packaging/arch/PKGBUILD):
+
+```bash
+cd packaging/arch && makepkg -si
+```
+
+Elsewhere, run `./acage` from a checkout, or install it:
 
 ```bash
 sudo make install                 # /usr/local/bin/acage

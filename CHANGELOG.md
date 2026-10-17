@@ -6,6 +6,11 @@ change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- An Arch Linux package (`packaging/arch/PKGBUILD`, package name `acage`).
+- A Security section in the README listing what's in place.
+
 ## [0.1.0] - 2026-10-16
 
 First release.

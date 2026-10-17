@@ -1,0 +1,31 @@
+# Maintainer: inexpeditus
+pkgname=acage
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Run AI coding agents in disposable, locked-down Alpine Linux VMs"
+arch=('any')
+url="https://github.com/inexpeditus/acage"
+license=('MIT')
+depends=('bash' 'coreutils' 'curl' 'gnupg' 'openssh' 'perl' 'libisoburn' 'qemu-base' 'edk2-ovmf')
+optdepends=(
+  'libvirt: the default backend (otherwise use --backend qemu)'
+  'dnsmasq: networking for the libvirt backend'
+  'sudo: the libvirt backend runs virsh through sudo'
+  'virtiofsd: shared folders (--share) with the libvirt backend'
+  'openssl: setting a password for your account in the VM (--password)'
+)
+checkdepends=('util-linux')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/inexpeditus/acage/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('c53034ffc1c098525b8d599ef140fa10dbd2c5d14b92452f6e0b452c84cc0407')
+
+check() {
+  cd "$pkgname-$pkgver"
+  tests/run
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  make install PREFIX=/usr DESTDIR="$pkgdir"
+  # Arch keeps licenses under the package's name.
+  mv "$pkgdir/usr/share/licenses/agentcage" "$pkgdir/usr/share/licenses/$pkgname"
+}
