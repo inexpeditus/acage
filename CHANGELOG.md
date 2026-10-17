@@ -39,5 +39,5 @@ First release.
 - `make install` / `uninstall`, the `acage(1)` man page, a test suite
   (`make test`) and CI.
 
-[Unreleased]: https://github.com/inexpeditus/agentcage/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/inexpeditus/agentcage/releases/tag/v0.1.0
+[Unreleased]: https://github.com/inexpeditus/acage/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/inexpeditus/acage/releases/tag/v0.1.0
