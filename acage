@@ -7,7 +7,7 @@
 # See README.md.
 set -euo pipefail
 
-VERSION=0.1.0
+VERSION=0.2.0
 
 # Find lib/ and share/: next to this script in a checkout, or under
 # PREFIX/lib/agentcage and PREFIX/share/agentcage when installed.

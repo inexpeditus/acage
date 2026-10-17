@@ -6,14 +6,26 @@ change behaviour.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-17
+
 ### Added
 
-- An Arch Linux package (`packaging/arch/PKGBUILD`, package name `acage`).
-- A Security section in the README listing what's in place.
-- `make e2e`: an end-to-end test on a real VM.
 - Downloaded Alpine images are cached in `~/.cache/agentcage/images` and
   reused instead of re-downloaded; a newer release replaces the old one, and
   a cached image is used when Alpine is unreachable.
+- An Arch Linux package (`packaging/arch/PKGBUILD`, package name `acage`).
+- `make e2e`: an end-to-end test on a real VM, verified on both backends.
+
+### Changed
+
+- The README is shorter and gains a Security section; the full threat model
+  and shared-folder detail stay in `SECURITY.md`.
+
+### Note
+
+- Upgrading from 0.1.0: the image moved from the pool directory to the cache,
+  so the first `image`/`install` downloads once more. The old pool copy, if
+  any, can be deleted by hand.
 
 ## [0.1.0] - 2026-10-16
 
@@ -48,5 +60,6 @@ First release.
 - `make install` / `uninstall`, the `acage(1)` man page, a test suite
   (`make test`) and CI.
 
-[Unreleased]: https://github.com/inexpeditus/acage/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/inexpeditus/acage/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/inexpeditus/acage/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/inexpeditus/acage/releases/tag/v0.1.0
