@@ -20,7 +20,7 @@ LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/c
 DATAFILES = share/domain.xml share/image-signing.asc share/firewall.nft \
             share/motd.agent share/motd.user
 
-.PHONY: all install uninstall check test
+.PHONY: all install uninstall check test e2e
 
 all:
 	@echo "Nothing to build. Run 'make install' (PREFIX=$(PREFIX))."
@@ -39,10 +39,16 @@ uninstall:
 	rm -rf $(LIB) $(DATA) $(DOC) $(LICENSES)
 
 check:
-	for f in acage $(LIBS) tests/run tests/*.sh; do bash -n $$f || exit 1; done
-	shellcheck -x -s bash -S error acage $(LIBS) tests/run tests/*.sh
+	for f in acage $(LIBS) tests/run tests/e2e tests/*.sh; do bash -n $$f || exit 1; done
+	shellcheck -x -s bash -S error acage $(LIBS) tests/run tests/e2e tests/*.sh
 	if command -v mandoc >/dev/null; then mandoc -T lint -W warning acage.1; \
 	else groff -mdoc -ww -z acage.1; fi
 
 test:
 	tests/run
+
+# A real VM, start to finish (KVM, network, a few minutes; sudo for libvirt).
+# make e2e BACKEND=qemu to test the qemu backend instead.
+BACKEND ?= libvirt
+e2e:
+	tests/e2e --backend $(BACKEND)

@@ -388,6 +388,12 @@ works. `make uninstall` removes them again.
 `tests/`. The tests need no VMs, network or root: each one gets a temporary
 home folder and stand-ins for `virsh`, `sudo` and QEMU.
 
+`make e2e` goes further: it creates a real VM, checks the accounts, root
+access, shared folder, firewall, `push`, login, restart and `delete`, and
+removes the VM again, reporting PASS or FAIL for each check. It needs KVM,
+the network and a few minutes, and `sudo` for the default libvirt backend
+(`make e2e BACKEND=qemu` tests the other one). Run it before a release.
+
 ## Files
 
 | File | Purpose |

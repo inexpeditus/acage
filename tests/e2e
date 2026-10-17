@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# End-to-end test on a real VM: creates one, checks everything that matters,
+# deletes it again, and reports PASS/FAIL per check. Unlike tests/run it
+# needs KVM, the network, a few minutes, and (for libvirt) sudo.
+#
+# Usage: tests/e2e [--backend libvirt|qemu] [--keep] [-- extra acage options]
+#   --keep   leave the VM in place when something fails, to look around
+# Example: tests/e2e --backend qemu -- --pool-dir ~/vms
+set -u
+cd "$(dirname "$0")/.." || exit 1
+ACAGE=$PWD/acage
+BACKEND=libvirt
+KEEP=0
+EXTRA=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --backend) BACKEND=$2; shift 2 ;;
+    --keep) KEEP=1; shift ;;
+    --) shift; EXTRA=("$@"); break ;;
+    *) echo "Unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+
+VM=e2e-test
+ME=$(id -un | tr 'A-Z' 'a-z')
+SHARE=$(mktemp -d /tmp/acage-e2e.XXXXXX)
+SRC=$(mktemp -d /tmp/acage-e2e-src.XXXXXX)
+pass=0 fail=0
+
+ok()  { pass=$((pass + 1)); printf '\033[32mPASS\033[0m %s\n' "$1"; }
+bad() { fail=$((fail + 1)); printf '\033[31mFAIL\033[0m %s\n' "$1"; [ -z "${2:-}" ] || printf '%s\n' "$2" | sed 's/^/     | /'; }
+# check NAME CMD... -> PASS if CMD succeeds
+check() { local name=$1 out; shift; if out=$("$@" 2>&1); then ok "$name"; else bad "$name" "$out"; fi; }
+# expect NAME WANT CMD... -> PASS if CMD prints exactly WANT
+expect() {
+  local name=$1 want=$2 got; shift 2
+  got=$("$@" 2>&1)
+  if [ "$got" = "$want" ]; then ok "$name"; else bad "$name" "expected '$want', got: $got"; fi
+}
+# Options go first: anything after the command's '--' is sent to the VM.
+ac() { "$ACAGE" --backend "$BACKEND" ${EXTRA[@]+"${EXTRA[@]}"} "$@"; }
+vm_agent() { ac ssh "$VM" -- "$@"; }
+vm_user() { ac ssh "$VM" --user -- "$@"; }
+
+cleanup() {
+  rm -rf "$SRC"
+  if [ "$fail" -gt 0 ] && [ "$KEEP" = 1 ]; then
+    echo "Left $VM in place (--keep). Remove it with: acage delete $VM --backend $BACKEND"
+  else
+    ac delete "$VM" -y >/dev/null 2>&1 || true
+  fi
+  rm -rf "$SHARE"
+}
+trap cleanup EXIT
+
+echo "== Creating $VM with the $BACKEND backend (a few minutes)"
+if ac delete "$VM" -y >/dev/null 2>&1; then echo "   (removed an old $VM first)"; fi
+if ! out=$(ac install "$VM" --user "$ME" --harness none --share "$SHARE" -y </dev/null 2>&1); then
+  bad "create the VM" "$out"; exit 1
+fi
+warnings=$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | grep '^warning:' | grep -v -e '--yes given')
+if [ -n "$warnings" ]; then bad "create without warnings" "$warnings"; else ok "create without warnings"; fi
+
+echo "== Accounts"
+expect "agent runs with your uid ($(id -u))" "$(id -u)" vm_agent id -u
+# "Must fail" checks run inside the VM and report back, so an SSH failure
+# can't pass for a refusal.
+expect "agent has no root" refused vm_agent 'doas -n true 2>/dev/null && echo ROOT || echo refused'
+check "your account has root" vm_user 'doas -n true'
+check "homes are private" vm_agent "! ls /home/$ME >/dev/null 2>&1 && [ \"\$(stat -c %a /home/agent)\" = 700 ]"
+
+echo "== Shared folder"
+echo from-host >"$SHARE/from-host.txt"
+expect "host file visible in the VM" from-host vm_agent cat shared/from-host.txt
+vm_agent 'echo from-vm > ~/shared/from-vm.txt' >/dev/null 2>&1
+check "VM file visible on the host" grep -qx from-vm "$SHARE/from-vm.txt"
+expect "VM file owned by you on the host" "$(id -u)" stat -c %u "$SHARE/from-vm.txt"
+
+echo "== Firewall"
+check "internet reachable" vm_agent 'wget -q -T 10 -O /dev/null https://registry.npmjs.org/'
+gw=$(vm_agent "ip route | awk '/^default/ {print \$3; exit}'" 2>/dev/null)
+for target in "$gw" 192.168.1.1 169.254.169.254; do
+  [ -n "$target" ] || continue
+  out=$(vm_agent "wget -q -T 5 -O /dev/null http://$target/" 2>&1)
+  if [[ "$out" == *unreachable* ]]; then ok "$target refused"; else bad "$target refused" "$out"; fi
+done
+expect "agent can't read or change the firewall" refused vm_agent 'nft list ruleset >/dev/null 2>&1 && echo READ || echo refused'
+
+echo "== Push"
+mkdir -p "$SRC/proj/sub"; echo pushed >"$SRC/proj/sub/f.txt"; ln -s /etc/hostname "$SRC/proj/link"
+check "push a folder" ac push "$VM" "$SRC/proj"
+expect "pushed file arrived" pushed vm_agent cat proj/sub/f.txt
+check "symlink stayed a symlink" vm_agent '[ -L proj/link ]'
+
+echo "== Login messages"
+# Plain ssh through the SSH config entry (its address is current right after
+# create), so no sudo prompt ends up inside the pseudo-terminal.
+for who in agent user; do
+  account=agent; [ "$who" = agent ] || account=$ME
+  msg=$(printf 'exit\n' | timeout 30 ssh -tt -o LogLevel=ERROR -o "User=$account" "$VM" 2>/dev/null | tr -d '\r' | head -5)
+  if [[ "$msg" == *"$(head -1 "share/motd.$who")"* ]]; then ok "$account sees its login message"; else bad "$account sees its login message" "$msg"; fi
+done
+
+echo "== Restart"
+check "stop" ac stop "$VM"
+check "start" ac start "$VM"
+up=0
+for _ in $(seq 1 40); do vm_agent true >/dev/null 2>&1 && { up=1; break; }; sleep 3; done
+if [ "$up" = 1 ]; then ok "reachable after restart"; else bad "reachable after restart"; fi
+check "network works after restart" vm_agent 'wget -q -T 10 -O /dev/null https://registry.npmjs.org/'
+check "shared folder mounted after restart" vm_agent 'mountpoint -q ~/shared'
+
+echo "== List and delete"
+listed() { ac list | grep -q "^$VM "; }
+check "list shows the VM" listed
+check "delete" ac delete "$VM" -y
+if listed; then bad "VM is gone"; else ok "VM is gone"; fi
+if grep -q "agentcage:begin $VM" "$HOME/.ssh/config" 2>/dev/null; then bad "SSH config entry removed"; else ok "SSH config entry removed"; fi
+if grep -q "^$VM " "$HOME/.ssh/known_hosts" 2>/dev/null; then bad "host key removed"; else ok "host key removed"; fi
+check "shared folder kept" test -f "$SHARE/from-vm.txt"
+
+echo
+echo "$pass passed, $fail failed"
+[ "$fail" = 0 ]
