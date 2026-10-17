@@ -55,11 +55,11 @@ image_privkey_file() { local p; p=$(image_pubkey_file); echo "${p%.pub}"; }
 # image_prepare_disk DEST -> copies the verified image to DEST and grows it to --disk GB.
 image_prepare_disk() {
   local disk=$1 img vsize
-  img="$POOL_DIR/$(alpine_image_file "$IMAGE_ARCH")"
   need qemu-img
+  img=$(alpine_cached_image "$IMAGE_ARCH")
   if ! dry; then
-    pool_exists "$img" || die "Image not found: $img (run 'acage image' first)"
-    vsize=$(prun qemu-img info --output=json "$img" | sed -n 's/.*"virtual-size": *\([0-9]*\).*/\1/p' | head -1)
+    [ -n "$img" ] && [ -f "$img" ] || die "No Alpine image is cached (run 'acage image' first)"
+    vsize=$(qemu-img info --output=json "$img" | sed -n 's/.*"virtual-size": *\([0-9]*\).*/\1/p' | head -1)
     if [ -n "$vsize" ] && [ "$vsize" -gt $((DISK_GB * 1073741824)) ]; then
       die "--disk ${DISK_GB} GB is smaller than the image ($((vsize / 1073741824)) GB); use a larger size"
     fi

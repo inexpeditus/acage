@@ -76,10 +76,15 @@ Run
 then
 .Cm create .
 .It Cm image
-Download the newest Alpine UEFI cloud image, check it against the SHA-512
-checksum Alpine publishes, and check Alpine's GPG signature on it in a
-temporary keyring against the key shipped with
+Make sure the newest Alpine UEFI cloud image is in the cache
+.Pq Pa ~/.cache/agentcage/images ,
+downloading it only when a newer release than the cached one is published.
+A download is checked against the SHA-512 checksum Alpine publishes and the
+GPG signature on it, verified in a temporary keyring against the key shipped
+with
 .Nm .
+After a newer image is verified the previous one is removed, and if Alpine
+cannot be reached the newest cached image is used.
 The fingerprint is shown for comparison with the one published at
 .Lk https://alpinelinux.org/cloud/
 unless

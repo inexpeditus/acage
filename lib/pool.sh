@@ -3,6 +3,9 @@
 # small config file that remembers the choice. Sourced by acage.
 
 CONFIG_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/agentcage/config
+# Verified Alpine images are cached here, under their own versioned file name,
+# so they are downloaded once and shared by every VM and pool directory.
+IMAGE_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/agentcage/images
 
 # config_get KEY -> value from the config file, or nothing.
 config_get() {
@@ -83,18 +86,19 @@ pool_remember() {
   dry && return 0
   [ "$(config_get "pool_dir_$BACKEND")" != "$POOL_DIR" ] || return 0
   config_set "pool_dir_$BACKEND" "$POOL_DIR"
-  log "Keeping images and VM disks in $POOL_DIR (saved in $CONFIG_FILE for later commands)"
+  log "Keeping VM disks in $POOL_DIR (saved in $CONFIG_FILE for later commands)"
 }
 
-# check_space NEED_GB WHAT -> refuses to continue unless the pool's filesystem
-# has NEED_GB free, plus 5 GB if it is the root filesystem, which the system
-# itself needs room on.
+# check_space NEED_GB WHAT [DIR] -> refuses to continue unless DIR's filesystem
+# (POOL_DIR by default) has NEED_GB free, plus 5 GB if it is the root
+# filesystem, which the system itself needs room on.
 check_space() {
-  local need=$1 what=$2 free mnt reserve=0 msg
-  read -r free mnt <<<"$(fs_info "$POOL_DIR")"
+  local need=$1 what=$2 where=${3:-$POOL_DIR} free mnt reserve=0 msg hint
+  read -r free mnt <<<"$(fs_info "$where")"
   [ "$mnt" != / ] || reserve=5
   [ "$free" -lt $((need + reserve)) ] || return 0
-  msg="Not enough disk space for $what: $POOL_DIR is on the filesystem mounted at $mnt, which has $free GB free, and this needs $need GB"
+  msg="Not enough disk space for $what: $where is on the filesystem mounted at $mnt, which has $free GB free, and this needs $need GB"
   [ "$reserve" = 0 ] || msg="$msg plus 5 GB left free for the system (it's your root filesystem)"
-  die "$msg. Use --pool-dir to pick a folder on a filesystem with more room, or a smaller --disk."
+  [ "$where" = "$POOL_DIR" ] && hint=" Use --pool-dir to pick a folder on a filesystem with more room, or a smaller --disk." || hint=""
+  die "$msg.$hint"
 }

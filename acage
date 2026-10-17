@@ -227,7 +227,7 @@ cmd_image() {
   mkdir -p "$cache"
   IMG_TMP=$(mktemp -d "$cache/agentcage-image.XXXXXX")
   trap 'rm -rf "${IMG_TMP:-}"' EXIT
-  alpine_image_fetch "$IMAGE_ARCH"
+  alpine_image_ensure "$IMAGE_ARCH" >/dev/null
   # Clean up now rather than only on exit: create may end in 'exec ssh',
   # which would skip the EXIT trap.
   rm -rf "$IMG_TMP"; IMG_TMP=""
@@ -335,19 +335,15 @@ need_name() { [ "$NAME_SET" = 1 ] || die "Which VM? acage $cmd NAME"; check_name
 
 case "$cmd" in
   image)
-    check_space 1 "the Alpine image"
-    pool_remember
+    check_space 1 "the Alpine image" "$IMAGE_CACHE"
     cmd_image ;;
   create|install)
     prompt_settings
     validate_settings
     backend_check_deps
     # A VM disk starts small but can grow to its full --disk size.
-    if [ "$cmd" = install ]; then
-      check_space $((DISK_GB + 1)) "the image and a ${DISK_GB} GB VM disk"
-    else
-      check_space "$DISK_GB" "a ${DISK_GB} GB VM disk"
-    fi
+    check_space "$DISK_GB" "a ${DISK_GB} GB VM disk"
+    [ "$cmd" = create ] || check_space 1 "the Alpine image" "$IMAGE_CACHE"
     pool_remember
     [ "$cmd" = create ] || cmd_image
     cmd_create ;;

@@ -115,8 +115,12 @@ steps.
 | `list` | List the VMs agentcage created |
 | `delete NAME` | Delete a VM and everything acage set up for it ([details](#deleting-a-vm)) |
 
-Run `image` again whenever you want a newer Alpine release. VMs you've
-already created aren't affected.
+The image is downloaded once into `~/.cache/agentcage/images` and reused by
+every VM and pool directory. `image` (and `install`) check Alpine for a newer
+release and only download when there is one, so re-running them is cheap;
+after a newer image is verified the previous one is deleted. If Alpine can't
+be reached, the newest cached image is used. VMs you've already created aren't
+affected by a later download.
 
 ## Options
 
@@ -308,7 +312,8 @@ host's localhost to `10.0.2.2` in the VM, which the firewall blocks (unless
 
 | | libvirt | `--backend qemu` |
 |---|---|---|
-| Images and disks | `/var/lib/libvirt/images/agentcage`, or `/home/agentcage` when `/` is a smaller, separate partition (root-only) | `~/.local/share/agentcage` |
+| Downloaded images | `~/.cache/agentcage/images` (shared by all VMs and pools) | same |
+| VM disks | `/var/lib/libvirt/images/agentcage`, or `/home/agentcage` when `/` is a smaller, separate partition (root-only) | `~/.local/share/agentcage` |
 | SSH key | `~/.ssh/id_agentcage` | same |
 | SSH config | fenced `# agentcage:begin NAME` block in `~/.ssh/config` | same |
 | Settings | `~/.config/agentcage/config` | same |
