@@ -1,5 +1,12 @@
 # agentcage
 
+> **TODO**
+> 1. Remove humanly unreadable AI bloat.
+> 2. Ubuntu testing.
+> 3. Manual audit.
+> 4. Remove bloat.
+> 5. Redo 4.
+
 Run a coding agent in a disposable, locked-down VM instead of on your own
 machine.
 
