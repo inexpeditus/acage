@@ -6,6 +6,45 @@ change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- `-v`/`--verbose`: print each command acage runs, and show cloud-init's
+  progress and the tail of its log during first boot instead of waiting
+  silently.
+- `acage uninstall`: removes every VM and all of acage's data (SSH key, config
+  entries, host keys, image cache, settings and pool directory), then prints a
+  reviewed command to remove the acage program and the host packages nothing
+  else needs. It never removes packages itself.
+- `install` and `create` check all required host tools up front and report
+  every missing one at once, with a single `apt`/`pacman` install command,
+  instead of failing one tool at a time.
+
+### Changed
+
+- Your account in the VM now defaults to your host username without asking, so
+  interactive `install`/`create` has one fewer question; `--user` still
+  overrides it.
+- The README is trimmed to an overview; the full command and option reference
+  lives in `acage --help` and the `acage(1)` man page.
+
+### Security
+
+- `acage` refuses to run as root, which would otherwise place your SSH key,
+  settings and the VM login in root's home and undo the isolation.
+
+### Fixed
+
+- `attach`, `ssh` and `push` refresh the VM's saved `~/.ssh/config` address
+  when it has changed (e.g. a new DHCP lease after a network reset), so plain
+  `ssh <name>` keeps working too; they already connected to the current
+  address themselves.
+- The libvirt backend talks to the system connection unprivileged when you are
+  in the `libvirt` group, falling back to `sudo` only when the daemon refuses,
+  so `list`, `console` and status checks no longer prompt for a password on a
+  normal desktop setup. `list` reads the disk's used size from libvirt instead
+  of `du`, and prints the whole table at once so a `sudo` prompt (when one is
+  still needed) can't split it.
+
 ## [0.2.0] - 2026-10-17
 
 ### Added
