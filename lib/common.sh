@@ -9,11 +9,14 @@ die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 dry() { [ "$DRY_RUN" = 1 ]; }
 interactive() { [ -t 0 ]; }
 
-# In dry-run mode state-changing commands are printed, not executed.
+# In dry-run mode state-changing commands are printed, not executed. With
+# --verbose (VERBOSE=1) they are printed and then executed, so you can see
+# exactly what acage does while installing or creating a VM.
 run() {
   if dry; then
     printf '\033[1;33m[dry-run]\033[0m %s\n' "$*" >&2
   else
+    [ "${VERBOSE:-0}" = 1 ] && printf '\033[1;36m[run]\033[0m %s\n' "$*" >&2
     "$@"
   fi
 }
@@ -24,6 +27,47 @@ prun() {
 }
 
 need() { command -v "$1" >/dev/null || die "$1 is required${2:+ ($2)}"; }
+
+# Host tool checks are collected so every missing one is reported at once, with
+# an install hint, instead of failing a command at a time. want() records a
+# missing tool (deduplicated); report_missing() prints them all and exits.
+MISSING_DEPS=()
+want() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  case " ${MISSING_DEPS[*]} " in *" $1 "*) ;; *) MISSING_DEPS+=("$1") ;; esac
+}
+
+# Package that provides CMD on package manager MGR (apt or pacman); CMD itself
+# when the names match or the manager is unknown.
+dep_pkg() {
+  case "$1" in
+    qemu-img)       [ "$2" = apt ] && echo qemu-utils || echo qemu-img ;;
+    qemu-system-*)  [ "$2" = apt ] && echo qemu-system-x86 || echo qemu-base ;;
+    xorriso)        [ "$2" = apt ] && echo xorriso || echo libisoburn ;;
+    virsh)          [ "$2" = apt ] && echo libvirt-daemon-system || echo libvirt ;;
+    gpg)            echo gnupg ;;
+    ssh|ssh-keygen) [ "$2" = apt ] && echo openssh-client || echo openssh ;;
+    *)              echo "$1" ;;
+  esac
+}
+
+# If want() found anything missing, list it all with one install command.
+report_missing() {
+  [ ${#MISSING_DEPS[@]} -eq 0 ] && return 0
+  local mgr="" cmd pkgs="" seen=" " p
+  command -v apt-get >/dev/null 2>&1 && mgr=apt || { command -v pacman >/dev/null 2>&1 && mgr=pacman; } || true
+  for cmd in "${MISSING_DEPS[@]}"; do
+    p=$(dep_pkg "$cmd" "$mgr")
+    case "$seen" in *" $p "*) ;; *) pkgs+="$p "; seen+="$p " ;; esac
+  done
+  warn "missing host tools: ${MISSING_DEPS[*]}"
+  case "$mgr" in
+    apt)    die "install them with: sudo apt install ${pkgs% }" ;;
+    pacman) die "install them with: sudo pacman -S ${pkgs% }" ;;
+    *)      die "install the packages that provide them, then run acage again" ;;
+  esac
+}
+
 is_uint() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 is_yes() { case "$1" in [yY]*) return 0 ;; *) return 1 ;; esac; }
 

@@ -44,6 +44,7 @@ ALLOW_LAN=0
 WHO=""
 SSH_PUBKEY=""
 DRY_RUN=${DRY_RUN:-0}
+VERBOSE=${VERBOSE:-0}
 ASSUME_YES=0
 NO_WAIT=0
 BACKEND=${AGENTCAGE_BACKEND:-libvirt}
@@ -109,6 +110,7 @@ General options:
   -y, --yes         Don't ask for confirmations (image key fingerprint,
                     shared-folder warning, delete)
   -n, --dry-run     Print what would change instead of changing it
+  -v, --verbose     Print each command acage runs as it installs or boots
   -h, --help        Show this help
   --version         Show the version
 
@@ -144,6 +146,7 @@ while [ $# -gt 0 ]; do
     --no-doas) GUEST_DOAS=0; DOAS_SET=1; shift ;;
     --no-wait) NO_WAIT=1; shift ;;
     -n|--dry-run) DRY_RUN=1; shift ;;
+    -v|--verbose) VERBOSE=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
     -h|--help) usage; exit 0 ;;
     --version) echo "acage $VERSION"; exit 0 ;;
@@ -167,7 +170,7 @@ done
 
 # Backends (lib/backend-NAME.sh) all define the same functions:
 #   backend_init          set POOL_DEFAULT, POOL_ROOT, IMAGE_ARCH, SHARE_FSTYPE
-#   backend_check_deps    fail early if host tools are missing
+#   backend_check_deps    record missing tools with want(), then report_missing
 #   pool_ensure, pool_exists FILE
 #   backend_exists VM, backend_running VM
 #   backend_create VM     disk + seed + define + start
@@ -343,12 +346,20 @@ need_name() { [ "$NAME_SET" = 1 ] || die "Which VM? acage $cmd NAME"; check_name
 
 case "$cmd" in
   image)
+    dry || { want curl; want gpg; report_missing; }
     check_space 1 "the Alpine image" "$IMAGE_CACHE"
     cmd_image ;;
   create|install)
     prompt_settings
     validate_settings
-    backend_check_deps
+    # Check every host tool up front and report all that are missing at once,
+    # with an install hint. A dry run skips this (it changes nothing anyway).
+    if ! dry; then
+      want xorriso; want ssh-keygen
+      [ "$cmd" = create ] || { want curl; want gpg; }   # install downloads the image
+      [ "$ASK_PW" != 1 ] || want openssl
+      backend_check_deps
+    fi
     # A VM disk starts small but can grow to its full --disk size.
     check_space "$DISK_GB" "a ${DISK_GB} GB VM disk"
     [ "$cmd" = create ] || check_space 1 "the Alpine image" "$IMAGE_CACHE"

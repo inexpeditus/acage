@@ -27,6 +27,51 @@ test_domain_xml_with_share_escapes_the_path() {
   if have xmllint; then printf '%s' "$OUT" | xmllint --noout - || fail "invalid XML"; fi
 }
 
+test_want_collects_missing_tools_once() {
+  load_libs
+  MISSING_DEPS=()
+  want sh                       # present: not recorded
+  want acage-no-such-tool-1     # missing
+  want acage-no-such-tool-1     # duplicate: ignored
+  want acage-no-such-tool-2
+  assert_eq "${MISSING_DEPS[*]}" "acage-no-such-tool-1 acage-no-such-tool-2"
+}
+
+test_dep_pkg_maps_packages_per_distro() {
+  load_libs
+  assert_eq "$(dep_pkg qemu-img apt)" qemu-utils
+  assert_eq "$(dep_pkg qemu-img pacman)" qemu-img
+  assert_eq "$(dep_pkg xorriso apt)" xorriso
+  assert_eq "$(dep_pkg xorriso pacman)" libisoburn
+  assert_eq "$(dep_pkg virsh apt)" libvirt-daemon-system
+  assert_eq "$(dep_pkg gpg apt)" gnupg
+  assert_eq "$(dep_pkg ssh-keygen pacman)" openssh
+  assert_eq "$(dep_pkg curl apt)" curl
+}
+
+test_report_missing_lists_everything_at_once() {
+  load_libs
+  MISSING_DEPS=()
+  report_missing   # nothing missing: must not exit
+  MISSING_DEPS=(xorriso virsh)
+  OUT=$( (report_missing) 2>&1 ) || true
+  OUT=$(printf '%s' "$OUT" | sed 's/\x1b\[[0-9;]*m//g')
+  assert_out "missing host tools: xorriso virsh"
+  assert_out "install"
+}
+
+test_verbose_echoes_commands_before_running_them() {
+  load_libs
+  DRY_RUN=0 VERBOSE=1
+  OUT=$( (run echo hi) 2>&1 )
+  OUT=$(printf '%s' "$OUT" | sed 's/\x1b\[[0-9;]*m//g')
+  assert_out "[run] echo hi"   # printed
+  assert_out "hi"              # and executed
+  DRY_RUN=0 VERBOSE=0
+  OUT=$( (run echo hi) 2>&1 )
+  assert_not_out "[run]"       # quiet without --verbose
+}
+
 test_newest_alpine_image_is_picked() {
   load_libs
   local list="generic_alpine-3.9.2-x86_64-uefi-cloudinit-r0.qcow2

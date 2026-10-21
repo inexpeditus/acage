@@ -15,14 +15,11 @@ backend_init() {
   esac
 }
 
+# Collects every missing tool (via want) and reports them together.
 backend_check_deps() {
-  need virsh "libvirt"
-  need qemu-img
-  need perl "to render the domain XML"
-  need sudo
-  if [ -n "$SHARE_DIR" ] && ! lv_have_virtiofsd; then
-    die "Sharing a folder needs virtiofsd (Arch: pacman -S virtiofsd; Ubuntu: apt install virtiofsd)"
-  fi
+  want virsh; want qemu-img; want perl; want sudo
+  [ -z "$SHARE_DIR" ] || lv_have_virtiofsd || MISSING_DEPS+=(virtiofsd)
+  report_missing
 }
 
 lv_have_virtiofsd() {

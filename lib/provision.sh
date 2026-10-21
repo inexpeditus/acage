@@ -179,7 +179,15 @@ provision_vm() {
   # Exit status 2 means "done, with recoverable errors": Alpine's image always
   # reports one (a missing console-fingerprint helper), so only 1 is a failure.
   local rc=0
-  ssh_probe "$vm" "$user" 'cloud-init status --wait' >/dev/null || rc=$?
+  # --verbose shows cloud-init's progress (and, on failure, its output log);
+  # otherwise the wait is silent.
+  if [ "${VERBOSE:-0}" = 1 ]; then
+    # Keep cloud-init's own exit status (it reports 2 on Alpine) for the check
+    # below, while still printing its progress and the tail of its log.
+    ssh_probe "$vm" "$user" 'cloud-init status --wait; __r=$?; echo "--- tail of /var/log/cloud-init-output.log ---"; { doas tail -n 30 /var/log/cloud-init-output.log 2>/dev/null || tail -n 30 /var/log/cloud-init-output.log 2>/dev/null || true; }; exit $__r' || rc=$?
+  else
+    ssh_probe "$vm" "$user" 'cloud-init status --wait' >/dev/null || rc=$?
+  fi
   [ "$rc" != 1 ] || warn "First-boot setup failed; look at /var/log/cloud-init-output.log in the VM."
 
   write_ssh_config_entry "$vm"

@@ -8,7 +8,7 @@
 .Nm
 .Cm install | create
 .Op Ar name
-.Op Fl ny
+.Op Fl nvy
 .Op Fl -allow-lan
 .Op Fl -backend Ar backend
 .Op Fl -disk Ar GB
@@ -220,6 +220,9 @@ The default is
 .Li agentcage .
 .It Fl n , Fl -dry-run
 Print what would be changed instead of changing it.
+.It Fl v , Fl -verbose
+Print each command as it runs, and show cloud-init's progress and the tail of
+its log while waiting for first boot, instead of waiting silently.
 .It Fl -no-doas
 Do not give the invoking user's account root either, so nobody in the
 machine can become root.
@@ -296,10 +299,12 @@ Print a summary of commands and options.
 Print the version.
 .El
 .Pp
-Before downloading or creating anything,
+Before creating anything,
 .Nm
-checks that the pool directory's filesystem has room for the full disk
-size, plus 5 GB that stays free when it is the root filesystem.
+checks that every required host tool is installed, reporting all that are
+missing at once with a command to install them, and that the pool directory's
+filesystem has room for the full disk size, plus 5 GB that stays free when it
+is the root filesystem.
 .Sh ENVIRONMENT
 .Bl -tag -width Ds
 .It Ev AGENTCAGE_BACKEND

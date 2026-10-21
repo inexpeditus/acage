@@ -17,12 +17,12 @@ backend_init() {
   QEMU_BIN=qemu-system-$IMAGE_ARCH
 }
 
+# Collects every missing tool (via want) and reports them together, then
+# checks the things no package install fixes: KVM access and UEFI firmware.
 backend_check_deps() {
-  need "$QEMU_BIN" "Ubuntu: apt install qemu-system; Arch: pacman -S qemu-base"
-  need qemu-img
-  if ! dry; then
-    [ -r /dev/kvm ] && [ -w /dev/kvm ] || die "No access to /dev/kvm (add yourself to the 'kvm' group and log in again)"
-  fi
+  want "$QEMU_BIN"; want qemu-img
+  report_missing
+  [ -r /dev/kvm ] && [ -w /dev/kvm ] || die "No access to /dev/kvm (add yourself to the 'kvm' group and log in again)"
   qemu_firmware
 }
 
@@ -106,6 +106,7 @@ backend_create() {
   run mkdir -p "$dir"
   image_prepare_disk "$dir/disk.qcow2"
   image_make_seed "$dir/seed.iso"
+  [ -n "${FW_VARS:-}" ] || qemu_firmware
   run cp "$FW_VARS" "$dir/vars.fd"
   run chmod 600 "$dir/vars.fd"
   port=$(qemu_free_port)
