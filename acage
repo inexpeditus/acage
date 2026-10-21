@@ -160,6 +160,10 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$cmd" ] || { usage; exit 1; }
 [ "$(uname -s)" = Linux ] || die "acage needs a Linux host with KVM"
+# Running as root would put your SSH key, settings and the VM login in root's
+# home and undo the isolation acage is for. The libvirt backend elevates with
+# sudo only for the few commands that need it. (--help/--version exit above.)
+[ "$(id -u)" != 0 ] || die "Don't run acage as root; run it as your normal user"
 
 # Backends (lib/backend-NAME.sh) all define the same functions:
 #   backend_init          set POOL_DEFAULT, POOL_ROOT, IMAGE_ARCH, SHARE_FSTYPE

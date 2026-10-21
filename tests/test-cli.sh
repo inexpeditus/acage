@@ -25,6 +25,11 @@ test_refuses_non_linux_hosts() {
   acage_run list; assert_rc 1; assert_out "needs a Linux host"
 }
 
+test_refuses_running_as_root() {
+  stub id 'case "$1" in -u) echo 0 ;; *) echo root ;; esac'
+  acage_run list; assert_rc 1; assert_out "as root"
+}
+
 test_rejects_bad_numbers() {
   local a
   for a in "--ram abc" "--ram 100" "--ram a[\$(id)]" "--vcpus 0" "--vcpus 65" "--disk 10G" "--disk 0"; do
