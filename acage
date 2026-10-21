@@ -195,9 +195,13 @@ check_name() {
 # Skipped when not running in a terminal (piped input, scripts, CI).
 prompt_settings() {
   interactive || return 0
+  # Your account defaults to your host username without asking, to keep install
+  # quick; --user overrides it. Set it here too so the doas/password prompts
+  # below can name it.
+  [ "$USER_SET" = 1 ] || GUEST_USER=$(id -un | tr 'A-Z' 'a-z')
   echo "Settings (press Enter to keep each default):" >&2
+  echo "  your account in the VM is '$GUEST_USER' (override with --user NAME)" >&2
   [ "$NAME_SET" = 1 ]    || ask VM "VM name" "$VM"
-  [ "$USER_SET" = 1 ]    || ask GUEST_USER "Your account in the VM (the agent gets its own, 'agent')" "${GUEST_USER:-$(id -un | tr 'A-Z' 'a-z')}"
   [ "$HARNESS_SET" = 1 ] || ask HARNESS "Agent harness(es): pi, claude-code, codex (comma-separated) or none" "$HARNESS"
   [ "$RAM_SET" = 1 ]     || ask RAM_MB "RAM in MB" "$RAM_MB"
   [ "$VCPUS_SET" = 1 ]   || ask VCPUS "vCPUs" "$VCPUS"
