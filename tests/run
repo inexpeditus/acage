@@ -21,7 +21,9 @@ for t in $(declare -F | awk '$3 ~ /^test_/ {print $3}'); do
   setup
   # Not in an 'if' or before '||': bash ignores set -e for anything run as
   # part of a condition, which would let a failing command pass silently.
-  (set -eu; "$t") >"$TMP/.out" 2>&1
+  # stdin is closed so a stray interactive read() can never block the suite
+  # (e.g. under 'makepkg', where stdin is a terminal and [ -t 0 ] is true).
+  (set -eu; "$t") >"$TMP/.out" 2>&1 </dev/null
   rc=$?
   out=$(cat "$TMP/.out")
   if [ "$rc" = 0 ]; then
