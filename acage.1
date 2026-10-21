@@ -46,6 +46,10 @@
 .Op Fl ny
 .Nm
 .Cm list
+.Nm
+.Cm uninstall
+.Op Fl ny
+.Op Fl -backend Ar backend
 .Sh DESCRIPTION
 .Nm
 downloads Alpine Linux's official cloud image, verifies its checksum and
@@ -161,6 +165,18 @@ Leftovers of a machine whose creation failed are cleaned up too.
 Machines
 .Nm
 did not create are refused.
+.It Cm uninstall
+Remove everything
+.Nm
+put on this computer: every machine on the selected backend and its disk, the
+generated SSH key, all the SSH configuration entries and host keys, the image
+cache, the saved settings and the pool directory.
+It asks for confirmation like
+.Cm delete .
+Host packages are never removed; instead a command to remove the acage program
+and the packages nothing else needs is printed, for review.
+Machines on the other backend are not included, so run it once per backend
+used.
 .El
 .Pp
 Settings for

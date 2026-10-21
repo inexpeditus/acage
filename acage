@@ -70,6 +70,8 @@ Commands:
   console NAME     Show the VM's serial console / boot output
   list             List VMs
   delete NAME      Delete a VM and its disk
+  uninstall        Remove every VM and all acage data, and print how to
+                   remove the host packages nothing else needs
 
 Every VM has two accounts: 'agent', which runs the AI and has no root, and
 yours, which can use doas.
@@ -188,9 +190,10 @@ backend_init
 [ "$POOL_SET" = 1 ] || pool_pick_default
 pool_validate
 
+# A valid hostname label that YAML won't read as a number or boolean.
+valid_vm_name() { [[ "$1" =~ ^[a-z][a-z0-9-]{0,62}$ ]] && [[ "$1" != *- ]]; }
 check_name() {
-  # A valid hostname label that YAML won't read as a number or boolean.
-  [[ "$VM" =~ ^[a-z][a-z0-9-]{0,62}$ ]] && [[ "$VM" != *- ]] \
+  valid_vm_name "$VM" \
     || die "Invalid VM name '$VM' (lowercase letters, digits and -, starting with a letter)"
 }
 
@@ -306,13 +309,41 @@ cmd_attach() {
   attach "$VM" "$WHO"
 }
 
+# confirm_destroy GERUND DECLINE_MSG -> make the user confirm an irreversible
+# removal, unless --yes; without a terminal, --yes is required.
+confirm_destroy() {
+  [ "$ASSUME_YES" = 1 ] && return 0
+  interactive || die "$1 needs confirmation: run interactively or add --yes"
+  yesno "Are you sure? This can't be undone." n || die "$2"
+}
+
+# purge_vm VM -> removes a VM (if it still exists) and everything acage saved
+# for it: its SSH config block, its known_hosts key and its settings. A shared
+# folder acage created is offered for deletion separately. No confirmation of
+# its own; the caller asks first.
+purge_vm() {
+  local vm=$1 exists=1 share created
+  backend_exists "$vm" || exists=0
+  share=$(config_get "share_$vm")
+  created=$(config_get "share_created_$vm")
+  [ "$exists" = 0 ] || backend_delete "$vm"
+  if ! dry; then
+    remove_ssh_config_entry "$vm"
+    [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$vm" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
+    config_unset "user_$vm"
+    config_unset "share_$vm"
+    config_unset "share_created_$vm"
+  fi
+  log "Deleted $vm"
+  [ -z "$share" ] || share_offer_delete "$share" "$created"
+}
+
 # Deletes a VM and everything acage set up for it on this computer. Also
 # cleans up after a create that failed half-way, when only settings are left.
 cmd_delete() {
-  local exists=1 share created
+  local exists=1 share
   backend_exists "$VM" || exists=0
   share=$(config_get "share_$VM")
-  created=$(config_get "share_created_$VM")
   if [ "$exists" = 0 ] && ! grep -qxF "$(ssh_marker_begin "$VM")" "$HOME/.ssh/config" 2>/dev/null \
        && [ -z "$(config_get "user_$VM")$share" ]; then
     die "No VM named '$VM'"
@@ -329,20 +360,94 @@ cmd_delete() {
     [ -z "$share" ] || echo "Its shared folder $share is not part of this; you'll be asked about it separately."
     echo "Your SSH key, the downloaded Alpine image and other VMs are kept."
   } >&2
-  if [ "$ASSUME_YES" != 1 ]; then
-    interactive || die "Deleting needs confirmation: run interactively or add --yes"
-    yesno "Are you sure? This can't be undone." n || die "Nothing was deleted"
+  confirm_destroy "Deleting" "Nothing was deleted"
+  purge_vm "$VM"
+}
+
+# Every VM name acage knows about, from its saved settings and its SSH config.
+acage_vm_names() {
+  { [ -f "$CONFIG_FILE" ] && sed -n 's/^user_\([^=]*\)=.*/\1/p' "$CONFIG_FILE"
+    [ -f "$HOME/.ssh/config" ] && sed -n 's/^# agentcage:begin //p' "$HOME/.ssh/config"
+    true   # keep the group's status zero for the pipe under set -e
+  } 2>/dev/null | sort -u
+}
+
+# Removes everything acage put on this computer: every VM on this backend, the
+# generated SSH key, all its SSH config entries and host keys, the image cache,
+# the settings and the pool directory. It never removes host packages; it
+# prints a command to remove the ones nothing else needs at the end.
+cmd_uninstall() {
+  local vms vm key=$HOME/.ssh/id_agentcage other=qemu
+  [ "$BACKEND" = qemu ] && other=libvirt
+  vms=$(acage_vm_names)
+  {
+    echo "This removes everything acage set up on this computer:"
+    [ -z "$vms" ] || { echo "  - these VMs on the $BACKEND backend, and their disks:"; echo "$vms" | sed 's/^/        /'; }
+    echo "  - every 'Host' entry acage added to ~/.ssh/config, and their host keys"
+    echo "  - the generated SSH key $key(.pub)"
+    echo "  - the image cache $(dirname "$IMAGE_CACHE")"
+    echo "  - the settings $(dirname "$CONFIG_FILE")"
+    echo "  - the pool directory $POOL_DIR"
+    echo "The acage program and your host packages (QEMU, libvirt, ...) are NOT removed"
+    echo "here; a command to remove the unneeded packages is printed at the end."
+    echo "(VMs made with --backend $other, if any, aren't included; run 'acage uninstall --backend $other' too.)"
+  } >&2
+  confirm_destroy "Uninstalling" "Nothing was removed"
+  for vm in $vms; do
+    valid_vm_name "$vm" || { warn "skipping unexpected VM name '$vm'"; continue; }
+    purge_vm "$vm"
+  done
+  run rm -f "$key" "$key.pub"
+  run rm -rf "$(dirname "$IMAGE_CACHE")"
+  prun rm -rf "$POOL_DIR"
+  [ "$BACKEND" != qemu ] || run rm -rf "/tmp/agentcage-$(id -u)"
+  run rm -rf "$(dirname "$CONFIG_FILE")"   # last: purge_vm above reads/writes it
+  log "Removed acage's data"
+  uninstall_pkg_hint
+}
+
+# Prints a reviewed command to remove the host packages acage needed, listing
+# only those nothing else installed still requires. The package manager works
+# out which that is (including packages that depend on each other); acage only
+# prints the command and never runs it.
+uninstall_pkg_hint() {
+  local mgr="" pkg req removable="" kept=""
+  if command -v pacman >/dev/null 2>&1; then mgr=pacman
+  elif command -v apt-get >/dev/null 2>&1; then mgr=apt; fi
+  echo >&2
+  if [ "$mgr" = pacman ]; then
+    for pkg in qemu-base edk2-ovmf libvirt libisoburn virtiofsd; do
+      pacman -Qq "$pkg" >/dev/null 2>&1 || continue
+      req=$(pacman -Qi "$pkg" 2>/dev/null | sed -n 's/^Required By *: *//p' | tr -s ' ')
+      case "$req" in ""|None|acage) removable="$removable $pkg" ;; *) kept="$kept $pkg (needed by $req);" ;; esac
+    done
+    log "To remove the acage program and the host packages nothing else needs:"
+    if pacman -Qq acage >/dev/null 2>&1; then
+      echo "    sudo pacman -Rns acage$removable" >&2
+    elif [ -n "$removable" ]; then
+      echo "    sudo pacman -Rns$removable   # plus the acage program, however you installed it" >&2
+    else
+      echo "    (every package acage used is still needed by something else)" >&2
+    fi
+  elif [ "$mgr" = apt ]; then
+    for pkg in qemu-system-x86 qemu-utils ovmf libvirt-daemon-system xorriso virtiofsd; do
+      dpkg -s "$pkg" >/dev/null 2>&1 || continue
+      if apt-cache rdepends --installed "$pkg" 2>/dev/null | sed '1,2d' | grep -q '[^[:space:]]'; then
+        kept="$kept $pkg"
+      else
+        removable="$removable $pkg"
+      fi
+    done
+    log "To remove the acage program and the host packages nothing else needs:"
+    echo "    sudo make uninstall        # the acage program, from the source checkout" >&2
+    [ -n "$removable" ] && echo "    sudo apt-get purge$removable && sudo apt-get autoremove --purge" >&2
+    [ -n "$removable" ] || echo "    (every package acage used is still needed by something else)" >&2
+  else
+    log "Remove the acage program and the host packages (QEMU, libvirt, UEFI firmware, xorriso, virtiofsd) with your package manager, if nothing else needs them."
+    return 0
   fi
-  [ "$exists" = 0 ] || backend_delete "$VM"
-  if ! dry; then
-    remove_ssh_config_entry "$VM"
-    [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$VM" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
-    config_unset "user_$VM"
-    config_unset "share_$VM"
-    config_unset "share_created_$VM"
-  fi
-  log "Deleted $VM"
-  [ -z "$share" ] || share_offer_delete "$share" "$created"
+  [ -z "$kept" ] || echo "  Kept, still needed by other software:$kept" >&2
+  echo "  Review the command before running it." >&2
 }
 
 need_name() { [ "$NAME_SET" = 1 ] || die "Which VM? acage $cmd NAME"; check_name; }
@@ -377,6 +482,7 @@ case "$cmd" in
   console) need_name; backend_console "$VM" ;;
   delete) need_name; cmd_delete ;;
   list) backend_list ;;
+  uninstall) cmd_uninstall ;;
   help) usage ;;
   *) die "Unknown command: $cmd (see acage --help)" ;;
 esac

@@ -182,6 +182,60 @@ test_delete_needs_confirmation_then_cleans_up() {
   cmp -s "$HOME/.ssh/config" "$TMP/config.orig" || fail "SSH config not restored: $(cat "$HOME/.ssh/config")"
 }
 
+test_uninstall_needs_confirmation() {
+  acage_run uninstall --backend qemu --pool-dir "$POOL"
+  assert_rc 1; assert_out "Uninstalling needs confirmation"
+}
+
+test_uninstall_dry_run_changes_nothing() {
+  fake_qemu_vm box
+  mkdir -p "$XDG_CONFIG_HOME/agentcage"
+  printf 'user_box=roy\n' >"$XDG_CONFIG_HOME/agentcage/config"
+  cp "$XDG_CONFIG_HOME/agentcage/config" "$TMP/orig"
+  stub pacman 'exit 1'
+  acage_run uninstall --backend qemu --pool-dir "$POOL" -n -y
+  assert_rc 0; assert_out "removes everything acage set up"
+  [ -d "$POOL/vms/box" ] || fail "dry run removed the VM"
+  cmp -s "$XDG_CONFIG_HOME/agentcage/config" "$TMP/orig" || fail "dry run changed the config"
+}
+
+test_uninstall_removes_all_data_and_prints_package_hint() {
+  fake_qemu_vm box
+  fake_qemu_vm dev
+  mkdir -p "$XDG_CONFIG_HOME/agentcage" "$HOME/.ssh" "$XDG_CACHE_HOME/agentcage/images"
+  printf 'pool_dir_qemu=%s\nuser_box=roy\nuser_dev=roy\n' "$POOL" >"$XDG_CONFIG_HOME/agentcage/config"
+  printf 'Host other\n    User x\n\n# agentcage:begin box\nHost box\n# agentcage:end box\n' >"$HOME/.ssh/config"
+  printf 'box ssh-ed25519 AAAAbox\nother ssh-ed25519 AAAAoth\n' >"$HOME/.ssh/known_hosts"
+  : >"$HOME/.ssh/id_agentcage"; : >"$HOME/.ssh/id_agentcage.pub"
+  : >"$XDG_CACHE_HOME/agentcage/images/img.qcow2"
+  # pacman present, reporting acage + qemu-base installed and qemu-base unneeded.
+  stub pacman 'case "$1 $2" in
+  "-Qq acage") exit 0 ;;
+  "-Qq qemu-base") exit 0 ;;
+  "-Qq"*) exit 1 ;;
+  "-Qi qemu-base") echo "Required By     : None" ;;
+  *) exit 1 ;;
+esac'
+
+  acage_run uninstall --backend qemu --pool-dir "$POOL" -y
+  assert_rc 0
+  assert_out "removes everything acage set up"
+  assert_out "box"; assert_out "dev"
+  assert_out "sudo pacman -Rns acage qemu-base"
+  assert_out "Review the command"
+  [ ! -e "$POOL/vms/box" ] || fail "VM box not removed"
+  [ ! -e "$POOL/vms/dev" ] || fail "VM dev not removed"
+  [ ! -e "$XDG_CONFIG_HOME/agentcage" ] || fail "settings not removed"
+  [ ! -e "$XDG_CACHE_HOME/agentcage" ] || fail "image cache not removed"
+  [ ! -e "$HOME/.ssh/id_agentcage" ] || fail "SSH key not removed"
+  [ ! -e "$HOME/.ssh/id_agentcage.pub" ] || fail "SSH public key not removed"
+  grep -q '^box ' "$HOME/.ssh/known_hosts" && fail "box host key kept"
+  grep -q '^other ' "$HOME/.ssh/known_hosts" || fail "another host's key wrongly removed"
+  grep -q 'agentcage:begin' "$HOME/.ssh/config" && fail "agentcage SSH block kept"
+  grep -q 'Host other' "$HOME/.ssh/config" || fail "foreign SSH entry removed"
+  return 0
+}
+
 test_attach_and_ssh_flags() {
   fake_qemu_vm box
   acage_run attach box --user --backend qemu --pool-dir "$POOL"
