@@ -127,6 +127,29 @@ test_ssh_config_block_round_trip() {
   cmp -s "$HOME/.ssh/config" "$TMP/orig" || fail "not restored: $(cat -A "$HOME/.ssh/config")"
 }
 
+test_sync_ssh_config_host_refreshes_a_changed_address() {
+  load_libs
+  SSH_PUBKEY=$TMP/key.pub; touch "$SSH_PUBKEY"
+  SSH_HOST=10.0.0.5 SSH_PORT=22
+  mkdir -p "$HOME/.ssh"
+  write_ssh_config_entry box 2>/dev/null
+  grep -q 'HostName 10.0.0.5' "$HOME/.ssh/config" || fail "setup failed"
+
+  SSH_HOST=10.0.0.9
+  sync_ssh_config_host box 2>/dev/null
+  grep -q 'HostName 10.0.0.9' "$HOME/.ssh/config" || fail "HostName not refreshed"
+  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 1
+
+  # Same address again: no rewrite, no duplicate block.
+  sync_ssh_config_host box 2>/dev/null
+  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 1
+  grep -q 'HostName 10.0.0.9' "$HOME/.ssh/config" || fail "HostName lost"
+
+  # A VM with no entry is left alone.
+  sync_ssh_config_host nosuchvm 2>/dev/null
+  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 1
+}
+
 test_ssh_config_leaves_foreign_entries_alone() {
   load_libs
   SSH_PUBKEY=$TMP/key.pub; touch "$SSH_PUBKEY"

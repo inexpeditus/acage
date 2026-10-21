@@ -326,6 +326,13 @@ Each machine gets an entry between
 .Ql # agentcage:begin Ar name
 and
 .Ql # agentcage:end Ar name .
+.Cm attach ,
+.Cm ssh
+and
+.Cm push
+rewrite its address when the machine's has changed, so plain
+.Ql ssh Ar name
+keeps working after a new DHCP lease.
 .It Pa /var/lib/libvirt/images/agentcage
 Default libvirt pool.
 .It Pa ~/.local/share/agentcage

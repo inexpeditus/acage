@@ -286,6 +286,7 @@ cmd_create() {
 cmd_ssh() {
   local user=$AGENT_USER
   backend_locate "$VM"
+  sync_ssh_config_host "$VM"
   [ "$WHO" != user ] || user=$(vm_user "$VM")
   exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
 }
@@ -294,12 +295,14 @@ cmd_push() {
   local user=$AGENT_USER
   [ ${#PUSH_PATHS[@]} -gt 0 ] || die "What should be copied? acage push $VM PATH..."
   backend_locate "$VM"
+  sync_ssh_config_host "$VM"
   [ "$WHO" != user ] || user=$(vm_user "$VM")
   push_paths "$VM" "$user" "$PUSH_TO" "${PUSH_PATHS[@]}"
 }
 
 cmd_attach() {
   backend_locate "$VM"
+  sync_ssh_config_host "$VM"
   attach "$VM" "$WHO"
 }
 

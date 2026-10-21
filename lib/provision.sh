@@ -76,9 +76,10 @@ remove_ssh_config_entry() {
 # 'ssh VM' logs in as the agent and 'ssh you@VM' as you; 'acage attach VM'
 # and 'acage ssh VM' always pass the current address.
 write_ssh_config_entry() {
-  local vm=$1 cfg="$HOME/.ssh/config" key
+  local vm=$1 cfg="$HOME/.ssh/config" key existed=0
   key=$(image_privkey_file)
   mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
+  grep -qxF "$(ssh_marker_begin "$vm")" "$cfg" 2>/dev/null && existed=1
   remove_ssh_config_entry "$vm"
   if grep -qixF "Host $vm" "$cfg" 2>/dev/null; then
     warn "$cfg already has its own 'Host $vm' entry; leaving it alone. Use 'acage ssh $vm'."
@@ -99,7 +100,26 @@ Host $vm
 $(ssh_marker_end "$vm")
 EOF
   chmod 600 "$cfg"
-  log "Added 'Host $vm' to $cfg"
+  if [ "$existed" = 1 ]; then
+    log "Updated 'Host $vm' in $cfg (address changed to $SSH_HOST)"
+  else
+    log "Added 'Host $vm' to $cfg"
+  fi
+}
+
+# sync_ssh_config_host VM -> if the VM's current address (SSH_HOST, set by
+# backend_locate) differs from the one saved in ~/.ssh/config, rewrite the
+# entry so plain 'ssh VM' keeps working after a lease change. Quiet when the
+# VM has no entry or the address is unchanged.
+sync_ssh_config_host() {
+  local vm=$1 cfg="$HOME/.ssh/config" cur
+  [ -f "$cfg" ] || return 0
+  grep -qxF "$(ssh_marker_begin "$vm")" "$cfg" 2>/dev/null || return 0
+  cur=$(awk -v b="$(ssh_marker_begin "$vm")" -v e="$(ssh_marker_end "$vm")" '
+    $0 == b { f = 1; next }
+    f && $1 == "HostName" { print $2; exit }
+    $0 == e { exit }' "$cfg")
+  [ "$cur" = "$SSH_HOST" ] || write_ssh_config_entry "$vm"
 }
 
 # vm_ssh VM USER ARGS... -> ssh as USER through the config entry, with the
