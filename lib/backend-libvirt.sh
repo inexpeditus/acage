@@ -34,15 +34,28 @@ lv_have_virtiofsd() {
   return 1
 }
 
+# Members of the 'libvirt' group may use the system connection without root
+# (the usual desktop setup), so prefer unprivileged virsh and fall back to
+# sudo only when the daemon refuses us. Probed once, then cached.
+lv_virsh_prefix() {
+  if [ -z "${LV_SUDO+x}" ]; then
+    if command -v virsh >/dev/null && virsh -c "$URI" list --name >/dev/null 2>&1
+    then LV_SUDO=""; else LV_SUDO=sudo; fi
+  fi
+  printf '%s' "$LV_SUDO"
+}
+
 virsh_() {
+  local sudo=""
+  [ "$(lv_virsh_prefix)" = sudo ] && sudo=sudo
   case "$1" in
-    dominfo|domstate|domblklist|domifaddr|dumpxml|desc|pool-info|pool-list|list)
+    dominfo|domstate|domblklist|domifaddr|dumpxml|desc|pool-info|pool-list|list|domstats)
       if dry; then
-        command -v virsh >/dev/null && sudo -n virsh -c "$URI" "$@" 2>/dev/null
+        command -v virsh >/dev/null && ${sudo:+sudo -n} virsh -c "$URI" "$@" 2>/dev/null
       else
-        sudo virsh -c "$URI" "$@"
+        ${sudo:+sudo} virsh -c "$URI" "$@"
       fi ;;
-    *) run sudo virsh -c "$URI" "$@" ;;
+    *) run ${sudo:+sudo} virsh -c "$URI" "$@" ;;
   esac
 }
 
@@ -180,19 +193,30 @@ backend_delete() {
 }
 
 backend_list() {
-  local vm state disk size
-  printf '%-20s %-12s %s\n' NAME STATE DISK
+  local vm state disk alloc size out=""
   for vm in $(virsh_ list --all --name 2>/dev/null); do
     [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || continue
     state=$(virsh_ domstate "$vm" 2>/dev/null | head -1)
     disk=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$3 == "vda" {print $4}')
-    size=$(sudo du -h "$disk" 2>/dev/null | cut -f1)
-    printf '%-20s %-12s %s\n' "$vm" "$state" "$disk${size:+ ($size used)}"
+    # The used size comes from libvirt, so listing never needs root to stat the
+    # root-owned pool file.
+    alloc=$(virsh_ domstats "$vm" --block 2>/dev/null | awk -F= '
+      { sub(/^[[:space:]]+/, "", $1) }
+      $1 ~ /^block\.[0-9]+\.name$/ && $2 == "vda" { split($1, a, "."); idx = a[2] }
+      idx != "" && $1 == "block." idx ".allocation" { print $2; exit }')
+    size=""
+    [ -n "$alloc" ] && size=$(numfmt --to=iec "$alloc" 2>/dev/null)
+    out+=$(printf '%-20s %-12s %s' "$vm" "$state" "$disk${size:+ ($size used)}")$'\n'
   done
+  # Printed together, after any sudo prompt, so it can't split the table.
+  printf '%-20s %-12s %s\n' NAME STATE DISK
+  printf '%s' "$out"
 }
 
 backend_console() {
+  local sudo=""
+  [ "$(lv_virsh_prefix)" = sudo ] && sudo=sudo
   backend_exists "$1" || die "No VM named '$1'"
   echo "Serial console of $1; press Ctrl+] to leave." >&2
-  exec sudo virsh -c "$URI" console "$1"
+  exec ${sudo:+sudo} virsh -c "$URI" console "$1"
 }
