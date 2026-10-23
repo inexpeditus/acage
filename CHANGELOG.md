@@ -18,6 +18,8 @@ change behaviour.
 - `install` and `create` check all required host tools up front and report
   every missing one at once, with a single `apt`/`pacman` install command,
   instead of failing one tool at a time.
+- `tmux` is installed in every VM, so you can keep your own shell in a second
+  pane beside the running agent.
 
 ### Changed
 
