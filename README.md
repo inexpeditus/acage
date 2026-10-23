@@ -19,7 +19,7 @@ There's a lot of user-friendly stuff. I'll try to jot it down asap but in the me
 8. Add a ~/.ssh/config entry and record the host key. Yes.
 9. (interactive) store API keys, offer a deploy key, done.
 
-Lightweight alpine distro _~193 MB DL, ~0.7 GB post-install (including packages git, nodejs, npm, vim, doas, nftables, acl and claude-code)_. Tmux coming
+Lightweight alpine distro _~193 MB DL, ~0.7 GB post-install (including packages git, nodejs, npm, vim, tmux, doas, nftables, acl and claude-code)_.
 
 `$ acage quick` or `$ acage quick --backend libvirt`
 Runs the install with default answers to every prompt - no interaction, like the example below.

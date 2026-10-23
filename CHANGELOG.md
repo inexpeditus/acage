@@ -34,6 +34,8 @@ change behaviour.
   home, run anything as you, or touch the firewall.
 - `--agent-md FILE`: install FILE in the agent's home as both `CLAUDE.md` and
   `AGENTS.md`, so the agent's harness picks up your instructions.
+- `tmux` is installed in every VM, so you can keep your own shell in a second
+  pane beside the running agent.
 
 ### Changed
 

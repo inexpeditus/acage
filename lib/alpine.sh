@@ -12,7 +12,7 @@ ALPINE_IMAGE_KEY_FPR=F26ADFADBAE702EF7AF637459DA7EF23BFFCDF22   # Tomalok, Alpin
 ALPINE_IMAGE_KEY_URL=https://alpinelinux.org/cloud/
 
 alpine_image_shell()         { echo /bin/ash; }   # bash is not installed by default
-alpine_base_packages()       { echo "git openssh nodejs npm vim acl"; }
+alpine_base_packages()       { echo "git openssh nodejs npm tmux vim acl"; }
 alpine_doas_packages()       { echo doas; }
 alpine_image_cloudinit_extra() { echo "package_update: true"; }
 

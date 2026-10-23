@@ -29,7 +29,7 @@ test_userdata_defaults() {
   assert_out "GRUB_TIMEOUT=0"
   assert_out "touch /etc/cloud/cloud-init.disabled"
   yaml_check 'd["users"][1]["name"] == "roy" and d["users"][1]["ssh_authorized_keys"] == ["'"$KEY"'"]'
-  yaml_check '{"git","openssh","nodejs","npm","vim","doas"} <= set(d["packages"])'
+  yaml_check '{"git","openssh","nodejs","npm","tmux","vim","doas"} <= set(d["packages"])'
   yaml_check 'd["disable_root"] is True'
 }
 
