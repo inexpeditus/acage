@@ -1,11 +1,19 @@
 # agentcage
 
 > **TODO**
+>
 > 1. Remove humanly unreadable AI bloat.
 > 2. Ubuntu testing.
 > 3. Manual audit.
 > 4. Remove bloat.
 > 5. Redo 4.
+
+> **2026-10-23 (before human audit, ubuntu testing, mac support)**
+>
+> 1. total lines: 4138
+> 2. programs and libs: 2053
+> 3. test: 1086
+> 4. misc: ~1k (markdowns and such)
 
 Run a coding agent in a disposable, locked-down VM instead of on your own
 machine.
@@ -16,11 +24,11 @@ kernel, in its own no-root account — it can't see your files (unless you share
 a folder), your keys, your clipboard, your local network or your host, and it
 can't become root in the VM to change that. See [SECURITY.md](SECURITY.md).
 
-| Harness | Installs | Logs in with |
-|---|---|---|
-| `pi` (default) | [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) | Anthropic API key |
-| `claude-code` | [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code) | Claude account or Anthropic API key |
-| `codex` | [Codex CLI](https://www.npmjs.com/package/@openai/codex) | ChatGPT account or OpenAI API key |
+| Harness        | Installs                                                               | Logs in with                        |
+| -------------- | ---------------------------------------------------------------------- | ----------------------------------- |
+| `pi` (default) | [Pi](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)    | Anthropic API key                   |
+| `claude-code`  | [Claude Code](https://www.npmjs.com/package/@anthropic-ai/claude-code) | Claude account or Anthropic API key |
+| `codex`        | [Codex CLI](https://www.npmjs.com/package/@openai/codex)               | ChatGPT account or OpenAI API key   |
 
 ## Install
 
