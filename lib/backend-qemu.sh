@@ -133,7 +133,9 @@ qemu_launch() {
   dir=$(vm_dir "$vm")
   sock=$(qemu_sock_dir)
   [ -n "${FW_CODE:-}" ] || qemu_firmware
-  if [ "$IMAGE_ARCH" = aarch64 ]; then machine=virt; else machine=q35; fi
+  # hpet=off removes the emulated HPET timer (x86): smaller device surface and
+  # fewer timer-driven VM exits. libvirt's domain template already does this.
+  if [ "$IMAGE_ARCH" = aarch64 ]; then machine=virt; else machine=q35,hpet=off; fi
   local args=(
     -name "$vm" -machine "$machine" -accel "$QEMU_ACCEL" -cpu host
     -smp "$C_VCPUS" -m "$C_RAM_MB"

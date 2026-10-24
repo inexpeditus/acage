@@ -29,6 +29,8 @@ change behaviour.
 - Interactive `install`/`create` no longer asks whether to set an account
   password; it is a niche, hard-to-judge choice for a disposable VM, so it is
   left to the `--password` flag for those who want it.
+- The qemu backend disables the emulated HPET timer, matching the libvirt
+  backend: a slightly smaller device surface and fewer timer-driven VM exits.
 
 ### Security
 
