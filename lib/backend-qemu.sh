@@ -148,6 +148,7 @@ qemu_launch() {
     -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$C_SSH_PORT-:22"
     -device virtio-net-pci,netdev=net0
     -device virtio-rng-pci
+    -device virtio-balloon-pci,deflate-on-oom=on
     -smbios "type=1,serial=ds=nocloud"
     -chardev "socket,id=con0,path=$(qesc "$sock/$vm.console"),server=on,wait=off,logfile=$(qesc "$dir/console.log")"
     -serial chardev:con0
