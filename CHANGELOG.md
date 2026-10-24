@@ -37,6 +37,10 @@ change behaviour.
 - VMs no longer sit on GRUB's boot menu (`GRUB_TIMEOUT=0`). The menu waited ten
   seconds for a keypress on a headless machine, which was about half the warm
   start; booting straight into Alpine cuts it to ~10 s.
+- A qemu-backend VM's disk is now a copy-on-write overlay on the shared cached
+  base image instead of a full copy: each VM holds only its own writes (~140 MB
+  vs ~310 MB) and many VMs share one base. A cached base is never pruned while
+  a VM still overlays it. (libvirt still uses a full copy.)
 
 ### Security
 

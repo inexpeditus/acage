@@ -127,8 +127,16 @@ interesting findings and the clearest optimization targets.
 ## Optimization findings (run 2, quiet host)
 
 Changes applied so far (security-neutral or security-positive): **HPET off on
-the qemu backend** (matches libvirt; smaller device surface), and **cloud-init
-disabled after first boot** (surface reduction + faster provision-adjacent).
+the qemu backend**, **cloud-init disabled after first boot**, **`GRUB_TIMEOUT=0`**,
+and a **copy-on-write disk overlay** on the qemu backend.
+
+- **Per-VM disk cut ~55% and the base is shared (qemu backend).** The disk is
+  now a CoW overlay on the cached base, not a full copy: **136 MiB of writes vs
+  a ~313 MiB copy**, and N VMs share one 193 MiB base (3 VMs: ~604 MB total vs
+  ~939 MB). Creation no longer copies the image, but provision *wall* time is
+  unchanged — it is boot/apk-install bound, not copy-bound. The prune step
+  won't delete a base an overlay still references; export will flatten the
+  overlay into a standalone image for cross-system portability.
 
 - **Idle CPU is a near-non-issue — the baseline 5–7% was mostly a measurement
   artifact.** On a *quiet* host with HPET off, `benchvm` idles at **~0.3%**

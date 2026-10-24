@@ -35,7 +35,12 @@ alpine_prune_cache() {
   local arch=$1 keep=$2 f
   for f in "$IMAGE_CACHE"/generic_alpine-*-"$arch"-uefi-cloudinit-r*.qcow2; do
     [ -e "$f" ] || continue
-    [ "$(basename "$f")" = "$keep" ] || { rm -f "$f" && log "Removed the older cached image $(basename "$f")"; }
+    [ "$(basename "$f")" = "$keep" ] && continue
+    if image_base_in_use "$f"; then
+      log "Keeping $(basename "$f"): a VM still overlays it"
+    else
+      rm -f "$f" && log "Removed the older cached image $(basename "$f")"
+    fi
   done
 }
 

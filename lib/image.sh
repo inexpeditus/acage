@@ -64,9 +64,37 @@ image_prepare_disk() {
       die "--disk ${DISK_GB} GB is smaller than the image ($((vsize / 1073741824)) GB); use a larger size"
     fi
   fi
-  log "Copying the image to $disk and growing it to ${DISK_GB} GB"
-  prun qemu-img convert -O qcow2 "$img" "$disk"
-  prun qemu-img resize -q "$disk" "${DISK_GB}G"
+  if [ "${DISK_OVERLAY:-0}" = 1 ]; then
+    # Copy-on-write overlay: instant to create, and the disk holds only this
+    # VM's writes. The base stays read-only and shared; alpine_prune_cache will
+    # not delete a base an overlay still references. (Export flattens the
+    # overlay into a standalone image so a moved VM stays portable.)
+    log "Creating a copy-on-write overlay on $(basename "$img"), sized to ${DISK_GB} GB"
+    prun qemu-img create -q -f qcow2 -F qcow2 -b "$img" "$disk" >/dev/null
+    prun qemu-img resize -q "$disk" "${DISK_GB}G"
+  else
+    log "Copying the image to $disk and growing it to ${DISK_GB} GB"
+    prun qemu-img convert -O qcow2 "$img" "$disk"
+    prun qemu-img resize -q "$disk" "${DISK_GB}G"
+  fi
+}
+
+# image_base_in_use BASE -> 0 if any VM overlay still has BASE as its backing
+# file. Overlays only live in the qemu backend's pool, so scan there (both the
+# active pool and the default, to cover a libvirt run that must not prune a
+# base the qemu VMs depend on).
+image_base_in_use() {
+  local base=$1 dir d bf
+  for dir in "${POOL_DIR:-}/vms" "${XDG_DATA_HOME:-$HOME/.local/share}/agentcage/vms"; do
+    [ -d "$dir" ] || continue
+    for d in "$dir"/*/disk.qcow2; do
+      [ -e "$d" ] || continue
+      bf=$(qemu-img info --output=json "$d" 2>/dev/null \
+           | sed -n 's/.*"backing-filename": *"\([^"]*\)".*/\1/p' | head -1)
+      [ "$bf" = "$base" ] && return 0
+    done
+  done
+  return 1
 }
 
 # make_iso DIR OUT -> ISO 9660 image labelled 'cidata' holding DIR's files.

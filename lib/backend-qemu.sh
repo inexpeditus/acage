@@ -7,6 +7,7 @@
 backend_init() {
   POOL_DEFAULT=${XDG_DATA_HOME:-$HOME/.local/share}/agentcage
   POOL_ROOT=0
+  DISK_OVERLAY=1   # user-owned pool: a VM disk is a copy-on-write overlay on the cached base
   SHARE_FSTYPE=9p
   case "$(uname -m)" in
     x86_64|amd64) IMAGE_ARCH=x86_64 ;;
