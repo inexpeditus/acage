@@ -21,7 +21,9 @@ while :; do
   if [ -z "$tfw" ]    && [ -s "$LOG" ]; then tfw=$n; fi
   if [ -z "$tkern" ]  && grep -q '\[    0\.000000\]' "$LOG" 2>/dev/null; then tkern=$n; fi
   if [ -z "$tlogin" ] && grep -qi 'login:' "$LOG" 2>/dev/null; then tlogin=$n; fi
-  if [ -z "$tssh" ]   && ssh $SSHOPT "$VM" true 2>/dev/null; then tssh=$n; break; fi
+  # only probe ssh once the login prompt is up, so the blocking probe can't
+  # quantize the console-based phase markers above
+  if [ -n "$tlogin" ] && [ -z "$tssh" ] && ssh $SSHOPT "$VM" true 2>/dev/null; then tssh=$n; break; fi
   if awk -v n="$n" -v t="$t0" 'BEGIN{exit !(n-t>90)}'; then break; fi
   sleep 0.2
 done
