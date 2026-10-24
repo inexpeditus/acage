@@ -48,7 +48,7 @@ VERBOSE=${VERBOSE:-0}
 ASSUME_YES=0
 NO_WAIT=0
 BACKEND=${AGENTCAGE_BACKEND:-libvirt}
-NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; PW_SET=0; POOL_SET=0
+NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; POOL_SET=0
 HARNESS_SET=0; SHARE_SET=0; LAN_SET=0
 SSH_ARGS=()
 PUSH_PATHS=()
@@ -143,7 +143,7 @@ while [ $# -gt 0 ]; do
     --pool-dir) need_value "$@"; POOL_DIR=$2; POOL_SET=1; shift 2 ;;
     --ssh-pubkey) need_value "$@"; SSH_PUBKEY=$2; KEY_SET=1; shift 2 ;;
     --backend) need_value "$@"; BACKEND=$2; shift 2 ;;
-    --password) ASK_PW=1; PW_SET=1; shift ;;
+    --password) ASK_PW=1; shift ;;
     --doas) GUEST_DOAS=1; DOAS_SET=1; shift ;;
     --no-doas) GUEST_DOAS=0; DOAS_SET=1; shift ;;
     --no-wait) NO_WAIT=1; shift ;;
@@ -215,7 +215,6 @@ prompt_settings() {
   [ "$POOL_SET" = 1 ]    || ask POOL_DIR "Folder for images and VM disks ($(set -- $(fs_info "$POOL_DIR"); echo "$1 GB free on $2"))" "$POOL_DIR"
   [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_agentcage.pub, created if missing)" "$SSH_PUBKEY"
   [ "$DOAS_SET" = 1 ]    || { if yesno "Give your account '$GUEST_USER' root in the VM (doas)? The agent never gets it" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
-  [ "$PW_SET" = 1 ]      || { yesno "Set a password for '$GUEST_USER' (doas asks for it; console login)?" n && ASK_PW=1 || true; }
   [ "$LAN_SET" = 1 ]     || { yesno "Let the VM reach your local network and this host? (default: internet only)" n && ALLOW_LAN=1 || true; }
   if [ "$SHARE_SET" != 1 ] && yesno "Share a host folder with the VM? (weakens isolation; you'll see a warning)" n; then
     ask SHARE_DIR "Folder to share" "$(share_default_dir "$VM")"

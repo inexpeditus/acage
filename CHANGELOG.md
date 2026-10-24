@@ -26,6 +26,9 @@ change behaviour.
   overrides it.
 - The README is trimmed to an overview; the full command and option reference
   lives in `acage --help` and the `acage(1)` man page.
+- Interactive `install`/`create` no longer asks whether to set an account
+  password; it is a niche, hard-to-judge choice for a disposable VM, so it is
+  left to the `--password` flag for those who want it.
 
 ### Security
 
