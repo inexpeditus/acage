@@ -238,8 +238,11 @@ esac'
 
 test_attach_and_ssh_flags() {
   fake_qemu_vm box
-  acage_run attach box --user --backend qemu --pool-dir "$POOL"
-  assert_rc 1; assert_out "'box' is not running"
+  # attach now starts a stopped VM (so no "not running" error); it still
+  # refuses one that does not exist. The auto-start path needs a real VM and
+  # is covered by tests/e2e.
+  acage_run attach nope --user --backend qemu --pool-dir "$POOL"
+  assert_rc 1; assert_out "No VM named 'nope'"
   acage_run ssh box --agent --backend qemu --pool-dir "$POOL" -- true
   assert_rc 1; assert_out "'box' is not running"
   # For create, --user still takes a name.
