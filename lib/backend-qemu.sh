@@ -133,16 +133,26 @@ qemu_launch() {
   local vm=$1 dir machine sock
   dir=$(vm_dir "$vm")
   sock=$(qemu_sock_dir)
-  [ -n "${FW_CODE:-}" ] || qemu_firmware
   # hpet=off removes the emulated HPET timer (x86): smaller device surface and
   # fewer timer-driven VM exits. libvirt's domain template already does this.
   if [ "$IMAGE_ARCH" = aarch64 ]; then machine=virt; else machine=q35,hpet=off; fi
+  # Once the kernel/initrd have been extracted from the image (post-provision,
+  # see backend_extract_kernel), boot them directly and skip UEFI/OVMF entirely:
+  # much faster, and no firmware in the boot path. The first boot has no
+  # extracted kernel yet, so it falls back to OVMF.
+  local boot=()
+  if [ -f "$dir/vmlinuz" ] && [ -f "$dir/initramfs" ] && [ -f "$dir/cmdline" ]; then
+    boot=(-kernel "$dir/vmlinuz" -initrd "$dir/initramfs" -append "$(cat "$dir/cmdline")")
+  else
+    [ -n "${FW_CODE:-}" ] || qemu_firmware
+    boot=(-drive "if=pflash,format=raw,readonly=on,file=$(qesc "$FW_CODE")"
+          -drive "if=pflash,format=raw,file=$(qesc "$dir/vars.fd")")
+  fi
   local args=(
     -name "$vm" -machine "$machine" -accel "$QEMU_ACCEL" -cpu host
     -smp "$C_VCPUS" -m "$C_RAM_MB"
     -nodefaults -no-user-config -display none
-    -drive "if=pflash,format=raw,readonly=on,file=$(qesc "$FW_CODE")"
-    -drive "if=pflash,format=raw,file=$(qesc "$dir/vars.fd")"
+    "${boot[@]}"
     -drive "if=virtio,format=qcow2,discard=unmap,file=$(qesc "$dir/disk.qcow2")"
     -drive "if=virtio,format=raw,readonly=on,file=$(qesc "$dir/seed.iso")"
     -netdev "user,id=net0,hostfwd=tcp:127.0.0.1:$C_SSH_PORT-:22"
@@ -168,6 +178,29 @@ backend_start() {
   if backend_running "$1"; then log "$1 is already running"; return 0; fi
   rm -f "$(qemu_sock_dir)/$1".{console,monitor}
   qemu_launch "$1"
+}
+
+# backend_extract_kernel VM USER -> copy the guest kernel, initramfs and kernel
+# command line out of the freshly provisioned VM, so every later boot boots them
+# directly and skips OVMF. The initramfs is root-only, so this needs doas; it is
+# best-effort, so a VM without doas (or any failure) simply keeps using OVMF.
+# Called once, post-provision, by provision_vm.
+backend_extract_kernel() {
+  local vm=$1 user=$2 dir
+  dir=$(vm_dir "$vm")
+  log "Extracting the kernel for fast, OVMF-free boots"
+  if vm_ssh "$vm" "$user" 'doas -n cat /boot/vmlinuz-virt' >"$dir/vmlinuz.tmp" 2>/dev/null &&
+     vm_ssh "$vm" "$user" 'doas -n cat /boot/initramfs-virt' >"$dir/initramfs.tmp" 2>/dev/null &&
+     vm_ssh "$vm" "$user" 'cat /proc/cmdline' 2>/dev/null | sed 's/BOOT_IMAGE=[^ ]* *//' >"$dir/cmdline.tmp" &&
+     [ -s "$dir/vmlinuz.tmp" ] && [ -s "$dir/initramfs.tmp" ] && [ -s "$dir/cmdline.tmp" ]; then
+    mv "$dir/vmlinuz.tmp" "$dir/vmlinuz"
+    mv "$dir/initramfs.tmp" "$dir/initramfs"
+    mv "$dir/cmdline.tmp" "$dir/cmdline"
+    log "Kernel extracted; later boots skip the firmware"
+  else
+    rm -f "$dir/vmlinuz.tmp" "$dir/initramfs.tmp" "$dir/cmdline.tmp"
+    warn "Could not extract the kernel (needs doas); this VM keeps booting via OVMF"
+  fi
 }
 
 # backend_wait VM -> sets SSH_HOST/SSH_PORT. The port forward accepts

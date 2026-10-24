@@ -215,6 +215,9 @@ provision_vm() {
   # First connection that records a host key: by now cloud-init (and any host-key
   # regeneration it does) has finished, so the key is final.
   vm_ssh "$vm" "$user" true || return 1
+  # Backends that can skip firmware on later boots extract the kernel now
+  # (qemu). Best-effort; defined only where supported.
+  if declare -F backend_extract_kernel >/dev/null; then backend_extract_kernel "$vm" "$user"; fi
   vm_ssh "$vm" "$AGENT_USER" true || { warn "Can't log in as '$AGENT_USER'; see /var/log/cloud-init-output.log in the VM."; return 1; }
   [ "$GUEST_DOAS" != 1 ] || vm_ssh "$vm" "$user" 'doas -n true' 2>/dev/null \
     || [ -n "$GUEST_PW_HASH" ] || warn "doas does not work for '$user'; see /var/log/cloud-init-output.log in the VM."
