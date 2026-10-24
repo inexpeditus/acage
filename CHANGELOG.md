@@ -34,6 +34,9 @@ change behaviour.
 - cloud-init is disabled after the first boot. It only has work to do once (at
   provision), so later boots skip it, which is faster and keeps a large
   root-privileged tool out of the steady-state boot path.
+- VMs no longer sit on GRUB's boot menu (`GRUB_TIMEOUT=0`). The menu waited ten
+  seconds for a keypress on a headless machine, which was about half the warm
+  start; booting straight into Alpine cuts it to ~10 s.
 
 ### Security
 

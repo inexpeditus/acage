@@ -151,6 +151,8 @@ EOF
       echo "  - [npm, install, -g, --ignore-scripts, \"$p\"]"
     fi
   done
+  echo "  - sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub"
+  echo "  - grub-mkconfig -o /boot/grub/grub.cfg"
   # cloud-init only needs to run once, at first boot. This runcmd is the last
   # thing it does, so everything above is already applied; disabling it here
   # trims several seconds off every later boot and takes a large,
