@@ -62,7 +62,8 @@ Commands:
   install          Download and verify the image, then create and boot a VM
   image            Download and verify the latest Alpine cloud image only
   create           Create and boot a VM from the downloaded image
-  attach NAME      Log in to a VM, asking whether as the agent or as you
+  attach NAME      Log in to a VM (starting it first if stopped), asking
+                   whether as the agent or as you
   push NAME PATH...  Copy files or folders from here into the agent's home
   ssh NAME [-- CMD]  Run CMD in a VM (as the agent unless --user)
   start NAME       Start a stopped VM
@@ -303,6 +304,13 @@ cmd_push() {
 }
 
 cmd_attach() {
+  backend_exists "$VM" || die "No VM named '$VM' (acage list)"
+  if ! backend_running "$VM"; then
+    log "$VM is stopped; starting it"
+    backend_start "$VM"
+    backend_wait "$VM" || die "$VM started but did not come up (acage console $VM)"
+    wait_for_key_login "$VM" "$AGENT_USER" || die "$VM booted but SSH is not ready yet"
+  fi
   backend_locate "$VM"
   sync_ssh_config_host "$VM"
   attach "$VM" "$WHO"

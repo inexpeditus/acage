@@ -21,6 +21,8 @@ change behaviour.
 
 ### Changed
 
+- `acage attach` now starts a stopped VM first instead of failing with "not
+  running"; you just exit the machine when you're done.
 - Your account in the VM now defaults to your host username without asking, so
   interactive `install`/`create` has one fewer question; `--user` still
   overrides it.
