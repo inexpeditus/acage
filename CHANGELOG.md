@@ -41,6 +41,11 @@ change behaviour.
   base image instead of a full copy: each VM holds only its own writes (~140 MB
   vs ~310 MB) and many VMs share one base. A cached base is never pruned while
   a VM still overlays it. (libvirt still uses a full copy.)
+- Later boots are trimmed further, so a VM warm-starts in ~6 s instead of ~10 s
+  (and ~21 s before any of this): after first boot cloud-init is removed from
+  the runlevels (its Python stages no longer run every boot), the DHCP client
+  skips the duplicate-address ARP probe that only times out on a NAT and IPv6
+  DHCP is dropped, and OpenRC starts services in parallel.
 
 ### Security
 

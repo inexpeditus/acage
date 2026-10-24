@@ -151,6 +151,17 @@ EOF
       echo "  - [npm, install, -g, --ignore-scripts, \"$p\"]"
     fi
   done
+  # Trim the boot on every later start (all security-neutral for a disposable
+  # VM on a private NAT):
+  #  - drop cloud-init from the runlevels; it only has work to do on first boot,
+  #    and its Python stages otherwise run (and serialise) every boot;
+  #  - skip dhcpcd's duplicate-address ARP probe, which only times out on NAT
+  #    (the DHCP server controls allocation), and drop IPv6 DHCP (acage is IPv4);
+  #  - start OpenRC services in parallel instead of one at a time.
+  echo "  - for s in cloud-init-local cloud-init cloud-config cloud-final cloud-init-hotplugd; do rc-update del \$s boot 2>/dev/null; rc-update del \$s default 2>/dev/null; done"
+  echo "  - sed -i -e '/inet6 dhcp/d' -e '/control-alias/d' /etc/network/interfaces"
+  echo "  - grep -q '^noarp' /etc/dhcpcd.conf || echo noarp >>/etc/dhcpcd.conf"
+  echo "  - sed -i 's/^#*rc_parallel=.*/rc_parallel=YES/' /etc/rc.conf; grep -q '^rc_parallel=' /etc/rc.conf || echo rc_parallel=YES >>/etc/rc.conf"
   echo "  - sed -i 's/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=0/' /etc/default/grub"
   echo "  - grub-mkconfig -o /boot/grub/grub.cfg"
   # cloud-init only needs to run once, at first boot. This runcmd is the last

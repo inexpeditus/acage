@@ -145,23 +145,30 @@ and a **copy-on-write disk overlay** on the qemu backend.
   from measuring on a *contended* host (other VMs running), where a descheduled
   guest does timer catch-up that inflates its own CPU, compounded by HPET being
   on. Lesson: idle-CPU numbers must be taken on a quiet host.
-- **Startup was ~75% firmware/bootloader — and most of that was a GRUB menu
-  timeout.** Warm-start phase breakdown (`bench/boot-breakdown.sh`) found:
-  qemu launch → ~5 s OVMF init → **~10 s sitting on GRUB's boot-menu countdown**
-  (headless VM, nobody picks a kernel) → kernel (1.3 s) + userspace + sshd
-  (~5 s) → ssh-ready at ~21 s. cloud-init was never the bottleneck (disabling it
-  changed warm start 20.8 → 20.9 s).
-  - **APPLIED: `GRUB_TIMEOUT=0`** (set on first boot via cloud-init, regenerated
-    with `grub-mkconfig`). Warm start **21.0 s → 10.5 s** — a 50% cut, zero
-    downside (recovery/submenu were already disabled in the image).
-  - **Remaining 10.5 s** = ~5.3 s OVMF init + ~5.2 s kernel/userspace/sshd.
-  - **Lever (big, deferred):** direct kernel boot (`-kernel`/`-initrd`) removes
-    the ~5 s OVMF → projected ~5–6 s warm start. Not "free": needs kernel/initrd
-    extraction from the image (a maintenance coupling) and a separate libvirt
-    implementation. Security-positive (removes OVMF from the path).
-  - **Lever (small):** trim the ~5 s userspace (DHCP wait, OpenRC services).
-  - Snapshot/restore remains the "make it instant" option, deferred pending a
-    security review (RNG/host-key reuse on resume).
+- **Warm start: 21 s → ~6 s, and it was never firmware.** The bottlenecks, in
+  the order we found and fixed them (`bench/boot-breakdown.sh`; note the tool
+  itself had to be fixed first — a blocking ssh probe was quantizing the phase
+  markers and made firmware *look* like ~5 s):
+
+  | step | warm start |
+  |---|---|
+  | original (GRUB menu waits 10 s for a keypress on a headless VM) | ~21 s |
+  | `GRUB_TIMEOUT=0` | ~10.5 s |
+  | remove cloud-init from the runlevels (its Python stages ran every boot) | ~8.8 s |
+  | dhcpcd `noarp` (skip the ARP duplicate-address probe that times out on NAT) + drop IPv6 DHCP | ~7.6 s |
+  | `rc_parallel=YES` (OpenRC starts services concurrently) | **~6 s** |
+
+  All applied, all security-neutral/positive. The real cost was **userspace**
+  (a GRUB timeout, then a serial chain of services), not firmware — OVMF, after
+  the GRUB fix, is negligible (~0.8 s). The remaining ~6 s is ~0.8 s firmware +
+  ~1.3 s kernel + ~3 s parallel userspace, near the floor for booting a real
+  kernel.
+  - **Deferred (`direct-kernel-boot` branch):** booting the extracted kernel
+    directly removes OVMF entirely (kernel starts at ~0.7 s) — a surface and
+    determinism win, but only ~0.5 s of time, so it's parked until that's worth
+    its extraction machinery.
+  - Snapshot/restore remains the "make it instant" option, pending a security
+    review (RNG/host-key reuse on resume).
 
 ## Reproducing
 
