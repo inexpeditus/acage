@@ -26,6 +26,7 @@ test_userdata_defaults() {
   assert_out "deluser --remove-home alpine"
   assert_out "ssh_pwauth: false"
   assert_out '[npm, install, -g, --ignore-scripts, "@earendil-works/pi-coding-agent"]'
+  assert_out "touch /etc/cloud/cloud-init.disabled"
   yaml_check 'd["users"][1]["name"] == "roy" and d["users"][1]["ssh_authorized_keys"] == ["'"$KEY"'"]'
   yaml_check '{"git","openssh","nodejs","npm","vim","doas"} <= set(d["packages"])'
   yaml_check 'd["disable_root"] is True'

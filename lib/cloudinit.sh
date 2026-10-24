@@ -151,4 +151,10 @@ EOF
       echo "  - [npm, install, -g, --ignore-scripts, \"$p\"]"
     fi
   done
+  # cloud-init only needs to run once, at first boot. This runcmd is the last
+  # thing it does, so everything above is already applied; disabling it here
+  # trims several seconds off every later boot and takes a large,
+  # root-privileged tool out of the boot path. The accounts, keys and firewall
+  # it set up are persistent, so nothing is lost by not re-running it.
+  echo "  - touch /etc/cloud/cloud-init.disabled"
 }

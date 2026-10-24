@@ -31,6 +31,9 @@ change behaviour.
   left to the `--password` flag for those who want it.
 - The qemu backend disables the emulated HPET timer, matching the libvirt
   backend: a slightly smaller device surface and fewer timer-driven VM exits.
+- cloud-init is disabled after the first boot. It only has work to do once (at
+  provision), so later boots skip it, which is faster and keeps a large
+  root-privileged tool out of the steady-state boot path.
 
 ### Security
 
