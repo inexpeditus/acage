@@ -21,12 +21,19 @@
     <access mode="shared"/>
   </memoryBacking>
   <vcpu placement="static">2</vcpu>
-  <os firmware="efi">
+  <os>
     <type arch="x86_64" machine="q35">hvm</type>
-    <firmware>
-      <feature enabled="no" name="enrolled-keys"/>
-      <feature enabled="no" name="secure-boot"/>
-    </firmware>
+    <!--
+      Explicit OVMF firmware path, filled in by acage for this host, instead of
+      firmware="efi" auto-selection. Auto-select makes libvirt enumerate every
+      firmware descriptor, and on a host that also ships ovmf-amdsev (Ubuntu's
+      default) virt-aa-helper rejects the SEV firmware as a restricted file and
+      the domain will not start. Pinning a plain, non-secure-boot OVMF build
+      sidesteps that. acage substitutes the paths; a copy of the vars template
+      becomes this domain's private NVRAM, removed on undefine.
+    -->
+    <loader readonly="yes" type="pflash">@OVMF_CODE@</loader>
+    <nvram template="@OVMF_VARS@"/>
     <bootmenu enable="no"/>
     <smbios mode="sysinfo"/>
   </os>

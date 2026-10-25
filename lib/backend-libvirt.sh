@@ -20,6 +20,7 @@ backend_check_deps() {
   want virsh; want qemu-img; want perl; want sudo
   [ -z "$SHARE_DIR" ] || lv_have_virtiofsd || MISSING_DEPS+=(virtiofsd)
   report_missing
+  lv_firmware   # fail early with a clear hint if no OVMF firmware is installed
 }
 
 lv_have_virtiofsd() {
@@ -70,11 +71,33 @@ lv_seed() { echo "$POOL_DIR/$1-seed.iso"; }
 backend_exists() { virsh_ dominfo "$1" >/dev/null 2>&1; }
 backend_running() { [ "$(virsh_ domstate "$1" 2>/dev/null | head -1)" = running ]; }
 
+# lv_firmware -> sets LV_FW_CODE/LV_FW_VARS to a plain (non-secure-boot) OVMF
+# code/vars pair present on this host, to pin into the domain instead of
+# firmware="efi" auto-select (which trips virt-aa-helper on hosts that also
+# ship ovmf-amdsev; see share/domain.xml). Candidates cover Arch and Debian/
+# Ubuntu layouts, newest/4M builds first.
+lv_firmware() {
+  local pairs pair code vars
+  pairs="/usr/share/edk2/x64/OVMF_CODE.4m.fd:/usr/share/edk2/x64/OVMF_VARS.4m.fd
+/usr/share/OVMF/OVMF_CODE_4M.fd:/usr/share/OVMF/OVMF_VARS_4M.fd
+/usr/share/qemu/edk2-x86_64-code.fd:/usr/share/qemu/edk2-i386-vars.fd
+/usr/share/OVMF/OVMF_CODE.fd:/usr/share/OVMF/OVMF_VARS.fd
+/usr/share/edk2/ovmf/OVMF_CODE.fd:/usr/share/edk2/ovmf/OVMF_VARS.fd"
+  while IFS= read -r pair; do
+    code=${pair%%:*}; vars=${pair#*:}
+    if [ -f "$code" ] && [ -f "$vars" ]; then LV_FW_CODE=$code; LV_FW_VARS=$vars; return 0; fi
+  done <<<"$pairs"
+  dry && { LV_FW_CODE="<ovmf-code.fd>"; LV_FW_VARS="<ovmf-vars.fd>"; return 0; }
+  die "No UEFI firmware (OVMF) found for the libvirt backend (Debian: apt install ovmf; Arch: pacman -S edk2-ovmf)"
+}
+
 # lv_render_xml VM DISK -> the domain XML for VM on stdout, from share/domain.xml
-# with this VM's name, memory, vCPUs, disk and (optional) shared folder.
+# with this VM's name, memory, vCPUs, disk, firmware and (optional) shared folder.
 lv_render_xml() {
   local vm=$1 disk=$2
-  DISK=$disk VM=$vm RAM_KIB=$((RAM_MB * 1024)) VCPUS=$VCPUS SHARE=$SHARE_DIR SHARE_TAG=$SHARE_TAG perl -0pe '
+  lv_firmware
+  DISK=$disk VM=$vm RAM_KIB=$((RAM_MB * 1024)) VCPUS=$VCPUS SHARE=$SHARE_DIR SHARE_TAG=$SHARE_TAG \
+  OVMF_CODE=$LV_FW_CODE OVMF_VARS=$LV_FW_VARS perl -0pe '
     sub esc { my $s = shift; $s =~ s/&/&amp;/g; $s =~ s/</&lt;/g; $s =~ s/>/&gt;/g; $s =~ s/"/&quot;/g; $s }
     # Every pattern is anchored to the start of a line, so the header comment
     # is never touched.
@@ -82,6 +105,8 @@ lv_render_xml() {
     s{^(\s*<memory unit="KiB">)\d+}{$1$ENV{RAM_KIB}}m;
     s{^(\s*<currentMemory unit="KiB">)\d+}{$1$ENV{RAM_KIB}}m;
     s{^(\s*<vcpu placement="static">)\d+}{$1$ENV{VCPUS}}m;
+    s{^(\s*<loader[^>]*>)\@OVMF_CODE\@}{$1 . esc($ENV{OVMF_CODE})}me;
+    s{^(\s*<nvram template=")\@OVMF_VARS\@}{$1 . esc($ENV{OVMF_VARS})}me;
     s{^(\s*<source file=")\@DISK_PATH\@"}{$1 . esc($ENV{DISK}) . q{"}}me;
     if (length $ENV{SHARE}) {
       s{^(\s*<source dir=")\@SHARED_DIR\@"}{$1 . esc($ENV{SHARE}) . q{"}}me;

@@ -65,7 +65,7 @@ qemu_firmware() {
     if [ -f "$code" ] && [ -f "$vars" ]; then FW_CODE=$code; FW_VARS=$vars; return 0; fi
   done <<<"$pairs"
   dry && { FW_CODE="<uefi-code.fd>"; FW_VARS="<uefi-vars.fd>"; return 0; }
-  die "No UEFI firmware for $IMAGE_ARCH found (Ubuntu: apt install ovmf; Arch: pacman -S edk2-ovmf)"
+  die "No UEFI firmware for $IMAGE_ARCH found (Debian: apt install ovmf; Arch: pacman -S edk2-ovmf)"
 }
 
 backend_exists() { [ -f "$(vm_dir "$1")/config" ]; }

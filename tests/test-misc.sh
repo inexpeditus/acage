@@ -4,7 +4,9 @@
 
 test_domain_xml_without_share() {
   load_libs libvirt
-  RAM_MB=3000 VCPUS=3
+  # DRY_RUN so lv_firmware yields a placeholder on hosts/CI without OVMF
+  # installed; this test exercises the rendering, not firmware discovery.
+  DRY_RUN=1 RAM_MB=3000 VCPUS=3
   OUT=$(lv_render_xml box /pool/box.qcow2)
   assert_out "<name>box</name>"
   assert_out '<memory unit="KiB">3072000</memory>'
@@ -19,7 +21,7 @@ test_domain_xml_without_share() {
 
 test_domain_xml_with_share_escapes_the_path() {
   load_libs libvirt
-  SHARE_DIR='/srv/a & <b> "c"'
+  DRY_RUN=1 SHARE_DIR='/srv/a & <b> "c"'
   OUT=$(lv_render_xml box /pool/box.qcow2)
   assert_out '<source dir="/srv/a &amp; &lt;b&gt; &quot;c&quot;"/>'
   assert_out '<target dir="agentcage"/>'

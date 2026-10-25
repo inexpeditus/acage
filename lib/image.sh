@@ -121,7 +121,7 @@ make_iso() {
     out_log=$(cd "$src" && xorriso -as mkisofs -quiet -o "$out" -V cidata -J -r user-data meta-data 2>&1) \
       || { printf '%s\n' "$out_log" >&2; return 1; }
   else
-    die "xorriso is needed to build the seed ISO (Arch: pacman -S libisoburn; Ubuntu: apt install xorriso)"
+    die "xorriso is needed to build the seed ISO (Arch: pacman -S libisoburn; Debian: apt install xorriso)"
   fi
 }
 
