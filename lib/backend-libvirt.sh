@@ -202,16 +202,26 @@ backend_stop() {
 # are deleted.
 backend_delete() {
   local vm=$1 files f
-  backend_exists "$vm" || die "No VM named '$vm'"
-  [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || die "'$vm' wasn't created by agentcage; not touching it"
-  files=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$1 == "file" && $4 != "-" {print $4}')
-  ! backend_running "$vm" || virsh_ destroy "$vm"
-  virsh_ undefine "$vm" --nvram
-  while IFS= read -r f; do
-    case "$f" in
-      */"$vm".qcow2|*/"$vm"-seed.iso) prun rm -f "$f" ;;
-    esac
-  done <<<"$files"
+  if backend_exists "$vm"; then
+    [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || die "'$vm' wasn't created by agentcage; not touching it"
+    files=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$1 == "file" && $4 != "-" {print $4}')
+    ! backend_running "$vm" || virsh_ destroy "$vm"
+    virsh_ undefine "$vm" --nvram
+    while IFS= read -r f; do
+      case "$f" in
+        */"$vm".qcow2|*/"$vm"-seed.iso) prun rm -f "$f" ;;
+      esac
+    done <<<"$files"
+  else
+    # No domain, but the disk and seed acage made may still be in the pool
+    # (e.g. a delete interrupted at the sudo prompt, which leaves the undefine
+    # done but the root-owned files removed). Sweep exactly those, so a later
+    # 'create' is not blocked by an orphan and 'delete' can finish its cleanup.
+    for f in "$(lv_disk "$vm")" "$(lv_seed "$vm")"; do
+      dry || pool_exists "$f" || continue
+      prun rm -f "$f"
+    done
+  fi
 }
 
 backend_list() {

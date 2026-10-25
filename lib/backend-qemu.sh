@@ -208,10 +208,12 @@ backend_stop() {
 }
 
 backend_delete() {
-  local pid
-  qemu_load "$1"
-  if pid=$(qemu_pid "$1"); then run kill "$pid"; fi
-  run rm -rf "$(vm_dir "$1")"
+  local pid dir
+  dir=$(vm_dir "$1")
+  # Kill a running VM if this is a real one; otherwise just sweep an orphaned
+  # directory (e.g. one left without a config), so a later create isn't blocked.
+  if backend_exists "$1" && pid=$(qemu_pid "$1"); then run kill "$pid"; fi
+  [ ! -d "$dir" ] || run rm -rf "$dir"
   run rm -f "$(qemu_sock_dir)/$1".{console,monitor}
   dry || rmdir "$(qemu_sock_dir)" 2>/dev/null || true
 }

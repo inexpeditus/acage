@@ -475,11 +475,12 @@ confirm_destroy() {
 # folder acage created is offered for deletion separately. No confirmation of
 # its own; the caller asks first.
 purge_vm() {
-  local vm=$1 exists=1 share created
-  backend_exists "$vm" || exists=0
+  local vm=$1 share created
   share=$(config_get "share_$vm")
   created=$(config_get "share_created_$vm")
-  [ "$exists" = 0 ] || backend_delete "$vm"
+  # Always call backend_delete: it removes the VM when it exists, and otherwise
+  # sweeps any orphaned disk/seed files a half-finished delete left behind.
+  backend_delete "$vm"
   if ! dry; then
     remove_ssh_config_entry "$vm"
     [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$vm" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
