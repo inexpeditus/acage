@@ -19,6 +19,7 @@ pkgbase = acage
 	optdepends = sudo: the libvirt backend runs virsh through sudo
 	optdepends = openssl: setting a password for your account in the VM (--password)
 	optdepends = openbsd-netcat: clean shutdown with --backend qemu (else the VM is terminated)
+	optdepends = tmux: the two-pane "acage work" session (agent + you side by side)
 	source = acage-0.1.0.tar.gz::https://github.com/inexpeditus/acage/archive/refs/tags/v0.1.0.tar.gz
 	sha256sums = c53034ffc1c098525b8d599ef140fa10dbd2c5d14b92452f6e0b452c84cc0407
 

@@ -64,6 +64,8 @@ Commands:
   create           Create and boot a VM from the downloaded image
   attach NAME      Log in to a VM (starting it first if stopped), asking
                    whether as the agent or as you
+  work NAME        Open two side-by-side shells in tmux: the agent (left) and
+                   you (right). Starts the VM first if stopped. Needs tmux.
   push NAME PATH...  Copy files or folders from here into the agent's home
   ssh NAME [-- CMD]  Run CMD in a VM (as the agent unless --user)
   start NAME       Start a stopped VM
@@ -303,17 +305,54 @@ cmd_push() {
   push_paths "$VM" "$user" "$PUSH_TO" "${PUSH_PATHS[@]}"
 }
 
+# ensure_up VM -> start the VM if it's stopped and wait until sshd accepts the key.
+ensure_up() {
+  local vm=$1
+  backend_running "$vm" && return 0
+  log "$vm is stopped; starting it"
+  backend_start "$vm"
+  backend_wait "$vm" || die "$vm started but did not come up (acage console $vm)"
+  wait_for_key_login "$vm" "$AGENT_USER" || die "$vm booted but SSH is not ready yet"
+}
+
 cmd_attach() {
   backend_exists "$VM" || die "No VM named '$VM' (acage list)"
-  if ! backend_running "$VM"; then
-    log "$VM is stopped; starting it"
-    backend_start "$VM"
-    backend_wait "$VM" || die "$VM started but did not come up (acage console $VM)"
-    wait_for_key_login "$VM" "$AGENT_USER" || die "$VM booted but SSH is not ready yet"
-  fi
+  ensure_up "$VM"
   backend_locate "$VM"
   sync_ssh_config_host "$VM"
   attach "$VM" "$WHO"
+}
+
+# cmd_work -> one command, two shells: a host-side tmux with the agent account on
+# the left (run the AI) and your account on the right (doas), each its own SSH
+# into the cage. Splitting on the host (not inside the VM) is what lets the two
+# panes be different accounts.
+cmd_work() {
+  backend_exists "$VM" || die "No VM named '$VM' (acage list)"
+  need tmux "the two-pane 'acage work' session; or use 'acage attach'"
+  ensure_up "$VM"
+  backend_locate "$VM"
+  sync_ssh_config_host "$VM"
+  local user a_ssh y_ssh sess
+  user=$(vm_user "$VM")
+  a_ssh="ssh -o HostName=$SSH_HOST -o Port=$SSH_PORT -o User=$AGENT_USER $VM"
+  y_ssh="ssh -o HostName=$SSH_HOST -o Port=$SSH_PORT -o User=$user $VM"
+  sess="acage-$VM"
+  if [ -n "${TMUX:-}" ]; then
+    # Already inside tmux: open the pair as a new window in the current session.
+    tmux new-window -n "$VM" "$a_ssh"
+    tmux split-window -h "$y_ssh"
+    tmux select-pane -L
+  else
+    tmux kill-session -t "$sess" 2>/dev/null || true
+    tmux new-session -d -s "$sess" -n "$VM" "$a_ssh"
+    tmux split-window -h -t "$sess" "$y_ssh"
+    tmux set-option -t "$sess" pane-border-status top 2>/dev/null || true
+    tmux select-pane -t "$sess:0.0" -T "$AGENT_USER — runs the AI" 2>/dev/null || true
+    tmux select-pane -t "$sess:0.1" -T "$user — you (doas)" 2>/dev/null || true
+    tmux select-pane -t "$sess:0.0" 2>/dev/null || true
+    exec tmux attach -t "$sess"
+  fi
 }
 
 # confirm_destroy GERUND DECLINE_MSG -> make the user confirm an irreversible
@@ -482,6 +521,7 @@ case "$cmd" in
     [ "$cmd" = create ] || cmd_image
     cmd_create ;;
   attach) need_name; cmd_attach ;;
+  work) need_name; cmd_work ;;
   push) need_name; cmd_push ;;
   ssh) need_name; cmd_ssh ;;
   start) need_name; backend_start "$VM" ;;

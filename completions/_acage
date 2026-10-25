@@ -12,6 +12,7 @@ commands=(
   'image:Download and verify the latest Alpine cloud image only'
   'create:Create and boot a VM from the downloaded image'
   'attach:Log in to a VM (starting it first if stopped)'
+  'work:Open two side-by-side shells (agent + you) in tmux'
   'push:Copy files or folders into the agent home'
   'ssh:Run a command in a VM'
   'start:Start a stopped VM'
@@ -45,7 +46,7 @@ case $state in
     _describe -t commands 'acage command' commands ;;
   args)
     case $line[1] in
-      attach|ssh|start|stop|console|delete)
+      attach|work|ssh|start|stop|console|delete)
         _acage_vms ;;
       push)
         _arguments \

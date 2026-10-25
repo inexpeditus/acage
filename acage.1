@@ -30,6 +30,9 @@
 .Ar name
 .Op Fl -agent | Fl -user
 .Nm
+.Cm work
+.Ar name
+.Nm
 .Cm push
 .Ar name
 .Ar path ...
@@ -114,6 +117,14 @@ or as the invoking user's account, unless
 or
 .Fl -user
 is given.
+.It Cm work Ar name
+Open two side-by-side shells in
+.Xr tmux 1 :
+the
+.Ql agent
+account on the left and the invoking user's account on the right, each over its
+own SSH connection into the machine.
+Starts the machine first if it is stopped.
 .It Cm push Ar name Ar path ...
 Copy files and directories from the host into the home directory of
 .Ql agent ,
