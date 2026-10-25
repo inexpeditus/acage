@@ -490,6 +490,9 @@ case "$cmd" in
   delete) need_name; cmd_delete ;;
   list) backend_list ;;
   uninstall) cmd_uninstall ;;
+  # Hidden: machine-readable VM names for shell completion. Reads only the
+  # config and ~/.ssh/config (no sudo, no libvirt query), so it stays instant.
+  _complete) acage_vm_names ;;
   help) usage ;;
   *) die "Unknown command: $cmd (see acage --help)" ;;
 esac

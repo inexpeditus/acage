@@ -14,6 +14,8 @@ DATA = $(DESTDIR)$(PREFIX)/share/agentcage
 DOC = $(DESTDIR)$(PREFIX)/share/doc/agentcage
 MAN1 = $(DESTDIR)$(PREFIX)/share/man/man1
 LICENSES = $(DESTDIR)$(PREFIX)/share/licenses/agentcage
+BASHCOMP = $(DESTDIR)$(PREFIX)/share/bash-completion/completions
+ZSHCOMP = $(DESTDIR)$(PREFIX)/share/zsh/site-functions
 
 LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/cloudinit.sh lib/image.sh \
        lib/provision.sh lib/push.sh lib/backend-libvirt.sh lib/backend-qemu.sh
@@ -26,16 +28,18 @@ all:
 	@echo "Nothing to build. Run 'make install' (PREFIX=$(PREFIX))."
 
 install:
-	mkdir -p $(BIN) $(LIB) $(DATA) $(DOC) $(LICENSES) $(MAN1)
+	mkdir -p $(BIN) $(LIB) $(DATA) $(DOC) $(LICENSES) $(MAN1) $(BASHCOMP) $(ZSHCOMP)
 	install -m 0755 acage $(BIN)/acage
 	install -m 0644 $(LIBS) $(LIB)/
 	install -m 0644 $(DATAFILES) $(DATA)/
 	install -m 0644 acage.1 $(MAN1)/
 	install -m 0644 README.md $(DOC)/
 	install -m 0644 LICENSE $(LICENSES)/
+	install -m 0644 completions/acage.bash $(BASHCOMP)/acage
+	install -m 0644 completions/_acage $(ZSHCOMP)/_acage
 
 uninstall:
-	rm -f $(BIN)/acage $(MAN1)/acage.1
+	rm -f $(BIN)/acage $(MAN1)/acage.1 $(BASHCOMP)/acage $(ZSHCOMP)/_acage
 	rm -rf $(LIB) $(DATA) $(DOC) $(LICENSES)
 
 check:
