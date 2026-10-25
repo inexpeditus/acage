@@ -1,0 +1,5 @@
+src/
+pkg/
+acage-git/
+*.tar.gz
+*.pkg.tar.*

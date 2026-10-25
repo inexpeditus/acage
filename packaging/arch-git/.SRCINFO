@@ -1,0 +1,28 @@
+pkgbase = acage-git
+	pkgdesc = Run AI coding agents in disposable, locked-down Alpine Linux VMs (latest main)
+	pkgver = 0.2.0
+	pkgrel = 1
+	url = https://github.com/inexpeditus/acage
+	arch = any
+	license = MIT
+	checkdepends = util-linux
+	makedepends = git
+	depends = bash
+	depends = coreutils
+	depends = curl
+	depends = gnupg
+	depends = openssh
+	depends = libisoburn
+	depends = qemu-base
+	depends = edk2-ovmf
+	optdepends = libvirt: the default backend (otherwise use --backend qemu)
+	optdepends = perl: the libvirt backend (renders the domain XML)
+	optdepends = sudo: the libvirt backend runs virsh through sudo
+	optdepends = openssl: setting a password for your account in the VM (--password)
+	optdepends = openbsd-netcat: clean shutdown with --backend qemu (else the VM is terminated)
+	provides = acage
+	conflicts = acage
+	source = acage-git::git+https://github.com/inexpeditus/acage.git#branch=main
+	sha256sums = SKIP
+
+pkgname = acage-git

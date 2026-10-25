@@ -1,0 +1,45 @@
+# Maintainer: inexpeditus
+# Tracks the main branch: every build installs the latest commit. For a pinned,
+# reproducible release package, use ../arch/PKGBUILD (pkgname 'acage') instead.
+pkgname=acage-git
+pkgver=0.2.0
+pkgrel=1
+pkgdesc="Run AI coding agents in disposable, locked-down Alpine Linux VMs (latest main)"
+arch=('any')
+url="https://github.com/inexpeditus/acage"
+license=('MIT')
+depends=('bash' 'coreutils' 'curl' 'gnupg' 'openssh' 'libisoburn' 'qemu-base' 'edk2-ovmf')
+optdepends=(
+  'libvirt: the default backend (otherwise use --backend qemu)'
+  'perl: the libvirt backend (renders the domain XML)'
+  'sudo: the libvirt backend runs virsh through sudo'
+  'openssl: setting a password for your account in the VM (--password)'
+  'openbsd-netcat: clean shutdown with --backend qemu (else the VM is terminated)'
+)
+makedepends=('git')
+checkdepends=('util-linux')
+provides=('acage')
+conflicts=('acage')
+source=("$pkgname::git+https://github.com/inexpeditus/acage.git#branch=main")
+sha256sums=('SKIP')
+
+# Version from the latest tag plus commits-since, e.g. 0.2.0.r5.gabc1234.
+# Falls back to a commit count if no tags are reachable in the clone.
+pkgver() {
+  cd "$pkgname"
+  git describe --long --abbrev=7 --tags 2>/dev/null \
+    | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' \
+    || printf 'r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+check() {
+  cd "$pkgname"
+  tests/run
+}
+
+package() {
+  cd "$pkgname"
+  make install PREFIX=/usr DESTDIR="$pkgdir"
+  # Arch keeps licenses under the package's name.
+  mv "$pkgdir/usr/share/licenses/agentcage" "$pkgdir/usr/share/licenses/$pkgname"
+}
