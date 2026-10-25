@@ -1,0 +1,66 @@
+name: release
+
+# When a version tag (vX.Y.Z) is pushed, bump the pinned Arch package
+# (packaging/arch) to that release and commit it back to main, so the stable
+# installer always matches the latest release without hand-editing.
+#
+# The acage-git package (packaging/arch-git) tracks main on its own and needs
+# no automation. Publishing to the AUR would be a further step (an SSH deploy
+# key + a push action); this workflow only keeps the in-repo PKGBUILD current.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  bump-pkgbuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Bump PKGBUILD and .SRCINFO to the released tag
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          ver="${tag#v}"
+          repo="${GITHUB_REPOSITORY}"
+          url="https://github.com/${repo}/archive/refs/tags/${tag}.tar.gz"
+
+          # GitHub's source tarball for the tag; its checksum is what the PKGBUILD pins.
+          curl -fsSL --retry 3 -o "release.tar.gz" "$url"
+          sha="$(sha256sum release.tar.gz | awk '{print $1}')"
+          rm -f release.tar.gz
+          echo "version=$ver sha256=$sha"
+
+          sed -i -E \
+            -e "s/^pkgver=.*/pkgver=${ver}/" \
+            -e "s/^pkgrel=.*/pkgrel=1/" \
+            -e "s/^sha256sums=\(.*\)/sha256sums=('${sha}')/" \
+            packaging/arch/PKGBUILD
+
+          sed -i -E \
+            -e "s/^\tpkgver = .*/\tpkgver = ${ver}/" \
+            -e "s/^\tpkgrel = .*/\tpkgrel = 1/" \
+            -e "s#^\tsource = .*#\tsource = acage-${ver}.tar.gz::${url}#" \
+            -e "s/^\tsha256sums = .*/\tsha256sums = ${sha}/" \
+            packaging/arch/.SRCINFO
+
+      - name: Commit the bump to main
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- packaging/arch/PKGBUILD packaging/arch/.SRCINFO; then
+            echo "PKGBUILD already current; nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging/arch/PKGBUILD packaging/arch/.SRCINFO
+          git commit -m "chore(packaging): bump Arch package to ${GITHUB_REF_NAME} [skip ci]"
+          git push origin HEAD:main
