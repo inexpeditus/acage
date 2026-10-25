@@ -5,7 +5,7 @@
 # Each harness is installed globally with npm during first boot. Packages that
 # do not need their install scripts get --ignore-scripts.
 
-HARNESS_CHOICES="pi claude-code codex"
+HARNESS_CHOICES="claude-code pi codex"
 
 harness_list() { [ "$HARNESS" = none ] || echo "$HARNESS" | tr ',' ' '; }
 

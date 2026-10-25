@@ -37,7 +37,7 @@ GUEST_USER=""
 GUEST_DOAS=1
 GUEST_PW_HASH=""
 ASK_PW=0
-HARNESS=pi
+HARNESS=claude-code
 SHARE_DIR=""
 SHARE_CREATED=0
 ALLOW_LAN=0
@@ -81,7 +81,7 @@ Options for install/create:
   --name NAME       VM name, also its hostname and SSH alias (default: $VM)
   --user NAME       Your account in the VM (default: your username)
   --harness LIST    Agent harness(es) to install, comma-separated:
-                    pi, claude-code, codex, or none (default: $HARNESS)
+                    claude-code, pi, codex, or none (default: $HARNESS)
   --share DIR       Share host folder DIR with the VM at ~/shared (created if
                     missing; asked interactively with the default
                     /mnt/acage-shared/NAME).
@@ -209,7 +209,7 @@ prompt_settings() {
   echo "Settings (press Enter to keep each default):" >&2
   echo "  your account in the VM is '$GUEST_USER' (override with --user NAME)" >&2
   [ "$NAME_SET" = 1 ]    || ask VM "VM name" "$VM"
-  [ "$HARNESS_SET" = 1 ] || ask HARNESS "Agent harness(es): pi, claude-code, codex (comma-separated) or none" "$HARNESS"
+  [ "$HARNESS_SET" = 1 ] || ask HARNESS "Agent harness(es): claude-code, pi, codex (comma-separated) or none" "$HARNESS"
   [ "$RAM_SET" = 1 ]     || ask RAM_MB "RAM in MB" "$RAM_MB"
   [ "$VCPUS_SET" = 1 ]   || ask VCPUS "vCPUs" "$VCPUS"
   [ "$DISK_SET" = 1 ]    || ask DISK_GB "Disk size in GB" "$DISK_GB"
