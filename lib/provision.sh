@@ -21,7 +21,7 @@ wait_for_key_login() {
   local vm=$1 user=$2 n out denied=0 opts
   opts=$(probe_opts)
   echo -n "Waiting for key login to work in the VM" >&2
-  for n in $(seq 1 100); do
+  for n in $(seq 1 180); do
     # shellcheck disable=SC2086 # one option per line, none contain spaces
     if out=$(IFS=$'\n'; ssh $opts "${user}@${vm}" true 2>&1); then
       echo >&2
@@ -35,10 +35,10 @@ wait_for_key_login() {
       return 1
     fi
     echo -n "." >&2
-    sleep 3
+    sleep 1
   done
   echo >&2
-  echo "No key login after five minutes. Look at the boot output:  acage console $vm" >&2
+  echo "No key login after a few minutes. Look at the boot output:  acage console $vm" >&2
   return 1
 }
 
@@ -123,11 +123,15 @@ sync_ssh_config_host() {
 }
 
 # vm_ssh VM USER ARGS... -> ssh as USER through the config entry, with the
-# current address.
+# current address. Reuses a multiplexed connection (ControlMaster), so the
+# several non-interactive checks run in provisioning share one handshake
+# instead of reconnecting each time.
 vm_ssh() {
   local vm=$1 user=$2; shift 2
   ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o HostKeyAlias="$vm" \
-      -o StrictHostKeyChecking=accept-new -o "User=$user" "$vm" "$@"
+      -o StrictHostKeyChecking=accept-new -o "User=$user" \
+      -o ControlMaster=auto -o "ControlPath=${TMPDIR:-/tmp}/acage-mux-%C" -o ControlPersist=20 \
+      "$vm" "$@"
 }
 
 # vm_user VM -> your account's name in VM, as saved when it was created.

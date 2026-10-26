@@ -175,7 +175,7 @@ backend_start() {
 backend_wait() {
   qemu_load "$1"
   SSH_HOST=127.0.0.1; SSH_PORT=$C_SSH_PORT
-  sleep 2
+  sleep 1
   backend_running "$1" || { echo "QEMU exited; see $(vm_dir "$1")/console.log" >&2; return 1; }
 }
 

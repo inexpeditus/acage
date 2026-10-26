@@ -122,7 +122,7 @@ backend_create() {
 backend_wait() {
   local vm=$1 n ip
   echo -n "Waiting for an IP" >&2
-  for n in $(seq 1 60); do
+  for n in $(seq 1 120); do
     ip=$(lv_ip "$vm")
     if [ -n "$ip" ] && timeout 1 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then
       echo >&2
@@ -131,7 +131,7 @@ backend_wait() {
       return 0
     fi
     echo -n "." >&2
-    sleep 2
+    sleep 1
   done
   echo >&2
   echo "Could not find the VM's IP, or sshd is not answering on it." >&2
