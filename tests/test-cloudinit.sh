@@ -142,6 +142,32 @@ test_userdata_with_share() {
   yaml_check 'any("mount /home/agent/shared" == c for c in d["runcmd"])'
 }
 
+test_bake_userdata() {
+  load_libs
+  HARNESS=claude-code
+  OUT=$(cloudinit_bake_userdata)
+  assert_out "#cloud-config"
+  # Packages are baked in; the harness is installed under 'set -e' so a failed
+  # install never yields a silent golden, and output goes to the serial console.
+  assert_out "set -e"
+  assert_out 'npm install -g "@anthropic-ai/claude-code" >/dev/ttyS0'
+  # Per-instance identity and cloud-init state are stripped, then it powers off.
+  assert_out "rm -f /etc/ssh/ssh_host_*"
+  assert_out ": > /etc/machine-id"
+  assert_out "poweroff"
+  # No accounts, keys or firewall: those are added per cage in golden mode.
+  assert_not_out "name: roy"
+  assert_not_out "ssh_authorized_keys"
+  assert_not_out "nftables.nft"
+  yaml_check '{"nodejs","npm"} <= set(d["packages"])'
+  yaml_check '"users" not in d'
+  # No harness -> nothing to npm-install, but it still strips and powers off.
+  HARNESS=none
+  OUT=$(cloudinit_bake_userdata)
+  assert_not_out "npm install"
+  assert_out "poweroff"
+}
+
 test_cloudinit_validate() {
   load_libs
   GUEST_USER=""; assert_fails "--user is required" cloudinit_validate

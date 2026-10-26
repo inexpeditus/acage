@@ -48,6 +48,7 @@ DRY_RUN=${DRY_RUN:-0}
 VERBOSE=${VERBOSE:-0}
 ASSUME_YES=0
 NO_WAIT=0
+GOLDEN=0
 BACKEND=${AGENTCAGE_BACKEND:-libvirt}
 NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; POOL_SET=0
 HARNESS_SET=0; SHARE_SET=0; LAN_SET=0; AUTOSTART_SET=0
@@ -62,6 +63,8 @@ Usage: acage <command> [name] [options]
 Commands:
   image            Download and verify the latest Alpine cloud image only
   create           Download and verify the image, then create and boot a VM
+  bake             Pre-build a reusable image with the packages and harness
+                   baked in, so later creates skip the apk/npm install
   attach NAME      Log in to a VM (starting it first if stopped), asking
                    whether as the agent or as you
   work NAME        Open two side-by-side shells in tmux: the agent (left) and
@@ -194,6 +197,9 @@ done
 #   backend_locate VM     set SSH_HOST/SSH_PORT for a running VM
 #   backend_start VM, backend_stop VM, backend_delete VM
 #   backend_list, backend_console VM
+# Baking always uses the qemu backend: it needs no sudo and produces a plain
+# qcow2 that either backend can then base cages on.
+[ "$cmd" != bake ] || BACKEND=qemu
 case "$BACKEND" in
   libvirt|qemu) ;;
   *) die "Unknown backend '$BACKEND' (libvirt or qemu)" ;;
@@ -262,6 +268,44 @@ cmd_image() {
   trap - EXIT
 }
 
+# Builds a golden image: a flattened base with the packages and harness set
+# pre-installed, so later creates for the same set skip the apk + npm work.
+# Provisions once in a throwaway qemu VM that installs, strips its own identity
+# (host keys, machine-id) and powers off; its disk is then flattened and cached.
+cmd_bake() {
+  local golden tmpvm="acage-bake-$$" n
+  cmd_image                                  # make sure the verified base is cached
+  golden=$(alpine_golden_name "$IMAGE_ARCH" "$HARNESS")
+  [ -n "$golden" ] || die "No base image is cached"
+  if [ -e "$golden" ]; then
+    log "Golden image already exists: $(basename "$golden") (delete it to rebuild)"
+    return 0
+  fi
+  BAKE=1
+  if dry; then
+    backend_create "$tmpvm"
+    echo "(dry-run) would wait for the bake VM to power off, then flatten its disk to $golden" >&2
+    return 0
+  fi
+  log "Baking a golden image for harness '$HARNESS' (provisions once; a few minutes)"
+  backend_create "$tmpvm"
+  echo -n "Installing packages, then powering off" >&2
+  # A successful bake powers off in about a minute; cap the wait at five so a
+  # stuck or failed install fails fast. The VM is left in place on timeout so
+  # 'acage console' can show why (the harness install logs to its console).
+  for n in $(seq 1 150); do backend_running "$tmpvm" || break; echo -n "." >&2; sleep 2; done
+  echo >&2
+  if backend_running "$tmpvm"; then
+    die "Bake VM did not power off in time; see 'acage console $tmpvm', then 'acage delete $tmpvm --backend qemu'"
+  fi
+  log "Flattening to $(basename "$golden")"
+  if ! qemu-img convert -O qcow2 "$(vm_dir "$tmpvm")/disk.qcow2" "$golden"; then
+    rm -f "$golden"; backend_delete "$tmpvm"; die "Could not flatten the bake disk"
+  fi
+  backend_delete "$tmpvm"
+  log "Golden image ready: $(basename "$golden") ($(du -h "$golden" 2>/dev/null | cut -f1)); 'acage create --harness $HARNESS' will now use it."
+}
+
 cmd_create() {
   if backend_exists "$VM"; then die "VM '$VM' already exists (acage delete $VM)"; fi
   [ -z "$SHARE_DIR" ] || { share_confirm; share_create; }
@@ -271,6 +315,14 @@ cmd_create() {
   fi
   # -f: ssh-keygen otherwise edits the login user's file, whatever HOME says.
   [ -f "$HOME/.ssh/known_hosts" ] && run ssh-keygen -R "$VM" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
+
+  # Use a golden image if one is baked for this harness set: cages built from it
+  # skip the apk + npm work (see 'acage bake').
+  local golden
+  if golden=$(alpine_cached_golden "$IMAGE_ARCH" "$HARNESS") && [ -n "$golden" ]; then
+    GOLDEN=1
+    log "Using golden image $(basename "$golden") (packages and harness already installed)"
+  fi
 
   backend_create "$VM"
   # Remembered so 'acage attach' knows your account and 'acage delete' the share.
@@ -531,6 +583,11 @@ case "$cmd" in
     pool_remember
     cmd_image     # ensure the verified image is cached (reuses it if present)
     cmd_create ;;
+  bake)
+    harness_validate
+    if ! dry; then want xorriso; want curl; want gpg; backend_check_deps; fi
+    check_space 1 "the Alpine image" "$IMAGE_CACHE"
+    cmd_bake ;;
   attach) need_name; cmd_attach ;;
   work) need_name; cmd_work ;;
   push) need_name; cmd_push ;;

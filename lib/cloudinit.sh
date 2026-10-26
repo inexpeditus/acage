@@ -45,8 +45,11 @@ manage_etc_hosts: true
 # uid 1000, which is usually the host user's uid.
 bootcmd:
   - "if id alpine >/dev/null 2>&1; then deluser --remove-home alpine; delgroup alpine 2>/dev/null; fi; true"
-users:
 EOF
+  # Golden image: regenerate the host keys stripped during bake, so every cage
+  # gets unique ones (sshd also regenerates missing keys when it starts).
+  [ "${GOLDEN:-0}" != 1 ] || echo '  - "ssh-keygen -A 2>/dev/null || true"'
+  echo "users:"
   # The agent comes first and gets your host uid (for regular host accounts,
   # 500 and up), so files in a shared folder have the same owner on both
   # sides. Your account then gets the next free uid.
@@ -128,13 +131,16 @@ EOF
     content: $(base64 -w0 "$DATA_DIR/firewall.nft")
 EOF
   fi
-  echo "packages:"
-  {
-    alpine_base_packages
-    [ "$GUEST_DOAS" != 1 ] || alpine_doas_packages
-    [ "$ALLOW_LAN" = 1 ] || echo nftables
-    for h in $(harness_list); do harness_packages "$h"; done
-  } | tr ' ' '\n' | awk 'NF && !seen[$0]++ {print "  - " $0}'
+  # In golden mode the packages are already baked in; skip installing them.
+  if [ "${GOLDEN:-0}" != 1 ]; then
+    echo "packages:"
+    {
+      alpine_base_packages
+      [ "$GUEST_DOAS" != 1 ] || alpine_doas_packages
+      [ "$ALLOW_LAN" = 1 ] || echo nftables
+      for h in $(harness_list); do harness_packages "$h"; done
+    } | tr ' ' '\n' | awk 'NF && !seen[$0]++ {print "  - " $0}'
+  fi
   # runcmd runs at the end of first boot, after packages and deferred files.
   cat <<EOF
 runcmd:
@@ -152,14 +158,17 @@ EOF
 EOF
   fi
   [ -z "$SHARE_DIR" ] || share_guest_runcmd "$AGENT_USER"
-  for h in $(harness_list); do
-    p=$(harness_npm_package "$h")
-    if harness_needs_scripts "$h"; then
-      echo "  - [npm, install, -g, \"$p\"]"
-    else
-      echo "  - [npm, install, -g, --ignore-scripts, \"$p\"]"
-    fi
-  done
+  # In golden mode the harness is already installed; skip the npm install.
+  if [ "${GOLDEN:-0}" != 1 ]; then
+    for h in $(harness_list); do
+      p=$(harness_npm_package "$h")
+      if harness_needs_scripts "$h"; then
+        echo "  - [npm, install, -g, \"$p\"]"
+      else
+        echo "  - [npm, install, -g, --ignore-scripts, \"$p\"]"
+      fi
+    done
+  fi
   # Trim the boot on every later start (all security-neutral for a disposable
   # VM on a private NAT):
   #  - drop cloud-init from the runlevels; it only has work to do on first boot,
@@ -179,4 +188,52 @@ EOF
   # root-privileged tool out of the boot path. The accounts, keys and firewall
   # it set up are persistent, so nothing is lost by not re-running it.
   echo "  - touch /etc/cloud/cloud-init.disabled"
+}
+
+# cloudinit_bake_userdata -> minimal cloud-config for BAKING a golden image:
+# install the static packages and harness(es), then strip per-instance identity
+# (host keys, machine-id) and cloud-init's own state so a cage made from the
+# image is unique and runs its own first-boot config, and finally power off. No
+# accounts, keys or firewall here -- those are added per cage in golden mode.
+cloudinit_bake_userdata() {
+  local h p
+  cat <<EOF
+#cloud-config
+$(alpine_image_cloudinit_extra)
+packages:
+EOF
+  {
+    alpine_base_packages
+    alpine_doas_packages
+    echo nftables
+    for h in $(harness_list); do harness_packages "$h"; done
+  } | tr ' ' '\n' | awk 'NF && !seen[$0]++ {print "  - " $0}'
+  # One shell block run under 'set -e', so the harness install must fully
+  # succeed before the strip and power-off: a failed install aborts the block,
+  # the VM stays up, and the bake surfaces as a timeout (never a silent, broken
+  # golden). npm's output goes to the serial console, so 'acage console' shows
+  # bake progress live and any failure is there to read. The explicit sync
+  # flushes the install through to the host image before it is flattened.
+  cat <<'EOF'
+runcmd:
+  - |
+    set -e
+EOF
+  for h in $(harness_list); do
+    p=$(harness_npm_package "$h")
+    if harness_needs_scripts "$h"; then
+      echo "    npm install -g \"$p\" >/dev/ttyS0 2>&1"
+    else
+      echo "    npm install -g --ignore-scripts \"$p\" >/dev/ttyS0 2>&1"
+    fi
+  done
+  cat <<'EOF'
+    rm -f /etc/ssh/ssh_host_*
+    : > /etc/machine-id
+    rm -rf /var/lib/cloud/instances /var/lib/cloud/instance /var/lib/cloud/data/instance-id /var/lib/cloud/sem
+    rm -f /etc/cloud/cloud-init.disabled
+    rm -rf /var/cache/apk/*
+    sync
+    poweroff
+EOF
 }

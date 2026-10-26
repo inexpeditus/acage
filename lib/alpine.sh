@@ -30,6 +30,31 @@ alpine_cached_image() {
   { ls -1 "$IMAGE_CACHE"/generic_alpine-*-"$1"-uefi-cloudinit-r*.qcow2 2>/dev/null || true; } | sort -V | tail -1
 }
 
+# alpine_harness_tag HARNESS_CSV -> the harness set, deduped and sorted, joined
+# with '+', or 'none'. Used to name a golden image for exactly that set.
+alpine_harness_tag() {
+  local t
+  t=$(printf '%s\n' "${1//,/ }" | tr ' ' '\n' | awk 'NF' | sort -u | paste -sd+ -)
+  printf '%s' "${t:-none}"
+}
+
+# alpine_golden_name ARCH HARNESS_CSV -> the golden-image path for the cached
+# base of ARCH plus this harness set, or nothing if no base is cached. A golden
+# image is a flattened base with the packages and harness(es) pre-installed, so
+# a create from it skips the apk/npm work (see 'acage bake').
+alpine_golden_name() {
+  local base stem
+  base=$(alpine_cached_image "$1"); [ -n "$base" ] || return 0
+  stem=$(basename "$base" .qcow2)
+  echo "$IMAGE_CACHE/golden-${stem}__$(alpine_harness_tag "$2").qcow2"
+}
+
+# alpine_cached_golden ARCH HARNESS_CSV -> the golden-image path if it exists.
+alpine_cached_golden() {
+  local g; g=$(alpine_golden_name "$1" "$2") || return 0
+  [ -n "$g" ] && [ -f "$g" ] && echo "$g"
+}
+
 # alpine_prune_cache ARCH KEEP -> deletes cached images for ARCH other than KEEP.
 alpine_prune_cache() {
   local arch=$1 keep=$2 f

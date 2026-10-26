@@ -56,24 +56,39 @@ image_privkey_file() { local p; p=$(image_pubkey_file); echo "${p%.pub}"; }
 image_prepare_disk() {
   local disk=$1 img vsize
   need qemu-img
-  img=$(alpine_cached_image "$IMAGE_ARCH")
+  # A create in golden mode bases the disk on the golden image (packages +
+  # harness pre-installed); a bake builds on the raw base. Either way the disk
+  # is grown to --disk GB: a bake needs the room to install nodejs/npm and the
+  # harness, and flattening to the golden is sparse, so the golden stays small
+  # on disk regardless of its virtual size.
+  if [ "${GOLDEN:-0}" = 1 ]; then
+    img=$(alpine_cached_golden "$IMAGE_ARCH" "$HARNESS")
+  else
+    img=$(alpine_cached_image "$IMAGE_ARCH")
+  fi
   if ! dry; then
-    [ -n "$img" ] && [ -f "$img" ] || die "No Alpine image is cached (run 'acage image' first)"
-    vsize=$(qemu-img info --output=json "$img" | sed -n 's/.*"virtual-size": *\([0-9]*\).*/\1/p' | head -1)
-    if [ -n "$vsize" ] && [ "$vsize" -gt $((DISK_GB * 1073741824)) ]; then
-      die "--disk ${DISK_GB} GB is smaller than the image ($((vsize / 1073741824)) GB); use a larger size"
+    if [ -z "$img" ] || [ ! -f "$img" ]; then
+      if [ "${GOLDEN:-0}" = 1 ]; then
+        die "No golden image is cached for this harness set (run 'acage bake' first)"
+      fi
+      die "No Alpine image is cached (run 'acage image' first)"
+    fi
+    if [ "${BAKE:-0}" != 1 ]; then
+      vsize=$(qemu-img info --output=json "$img" | sed -n 's/.*"virtual-size": *\([0-9]*\).*/\1/p' | head -1)
+      if [ -n "$vsize" ] && [ "$vsize" -gt $((DISK_GB * 1073741824)) ]; then
+        die "--disk ${DISK_GB} GB is smaller than the image ($((vsize / 1073741824)) GB); use a larger size"
+      fi
     fi
   fi
   if [ "${DISK_OVERLAY:-0}" = 1 ]; then
     # Copy-on-write overlay: instant to create, and the disk holds only this
     # VM's writes. The base stays read-only and shared; alpine_prune_cache will
-    # not delete a base an overlay still references. (Export flattens the
-    # overlay into a standalone image so a moved VM stays portable.)
-    log "Creating a copy-on-write overlay on $(basename "$img"), sized to ${DISK_GB} GB"
+    # not delete a base an overlay still references.
+    log "Creating a copy-on-write overlay on $(basename "$img")"
     prun qemu-img create -q -f qcow2 -F qcow2 -b "$img" "$disk" >/dev/null
     prun qemu-img resize -q "$disk" "${DISK_GB}G"
   else
-    log "Copying the image to $disk and growing it to ${DISK_GB} GB"
+    log "Copying the image to $disk"
     prun qemu-img convert -O qcow2 "$img" "$disk"
     prun qemu-img resize -q "$disk" "${DISK_GB}G"
   fi
@@ -113,6 +128,21 @@ make_iso() {
 # image_make_seed DEST -> builds the first-boot seed ISO at DEST.
 image_make_seed() {
   local dest=$1 pub key tmp
+  # Bake seed: no accounts or keys, just the package/strip/poweroff config.
+  if [ "${BAKE:-0}" = 1 ]; then
+    if dry; then
+      echo "(dry-run) bake config that would go into $dest:" >&2
+      cloudinit_bake_userdata | sed 's/^/    | /' >&2
+      run make_iso "<seed dir>" "$dest"; return
+    fi
+    tmp=$(mktemp -d); mkdir "$tmp/seed"
+    cloudinit_bake_userdata >"$tmp/seed/user-data"
+    printf 'instance-id: %s-%s\nlocal-hostname: %s\n' "$VM" "$(date +%s)" "$VM" >"$tmp/seed/meta-data"
+    make_iso "$tmp/seed" "$tmp/seed.iso" || { rm -rf "$tmp"; die "Could not build the bake seed ISO"; }
+    prun install -m 0644 "$tmp/seed.iso" "$dest"; rm -rf "$tmp"
+    log "Bake config written to $dest"
+    return
+  fi
   pub=$(image_pubkey_file)
   if dry; then
     key="$(cat "$pub" 2>/dev/null || echo "ssh-ed25519 AAAA...your-public-key")"

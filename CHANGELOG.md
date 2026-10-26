@@ -18,6 +18,12 @@ change behaviour.
 - `install` and `create` check all required host tools up front and report
   every missing one at once, with a single `apt`/`pacman` install command,
   instead of failing one tool at a time.
+- `acage bake`: pre-build a reusable "golden" image with the packages and the
+  chosen harness already installed, so later `create`s for the same harness set
+  skip the apk/npm work (about 15 seconds faster per VM). The bake provisions
+  once in a throwaway VM, strips its per-instance identity (host keys,
+  machine-id) so every cage stays unique, and `create` uses the golden image
+  automatically when one is cached for that harness set.
 
 ### Changed
 
