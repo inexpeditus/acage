@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+# acage-tui: a whiptail front-end for acage. It is a thin wrapper -- every
+# action shells out to the acage CLI, so all the real logic (and its security
+# decisions) stay in one auditable place. Needs whiptail (package: newt).
+set -euo pipefail
+
+command -v whiptail >/dev/null 2>&1 || {
+  echo "acage-tui needs whiptail (Arch: pacman -S libnewt; Debian/Ubuntu: apt install whiptail)" >&2
+  exit 1
+}
+
+# Prefer an acage next to this script (a source checkout), else one on PATH.
+SELF_DIR=$(cd "$(dirname "$0")" && pwd)
+if [ -x "$SELF_DIR/acage" ]; then ACAGE=$SELF_DIR/acage; else ACAGE=acage; fi
+command -v "$ACAGE" >/dev/null 2>&1 || { echo "acage not found (install it, or run from the source checkout)" >&2; exit 1; }
+
+BT="acage - run AI agents in disposable VMs"
+
+# wt WIDGET... -> run whiptail, returning the entered value on stdout (whiptail
+# writes it to stderr, so swap fds), and its exit status (0 ok, 1 cancel/no).
+wt() { whiptail --backtitle "$BT" "$@" 3>&1 1>&2 2>&3; }
+
+# Reset the terminal and wait, reading from the real tty. acage create can end
+# in an interactive ssh ("Connect now?"), which leaves the terminal in a state
+# that would otherwise make the next whiptail menu bail out.
+pause() {
+  stty sane </dev/tty >/dev/tty 2>/dev/null || true
+  read -rp "Press Enter to return to the menu..." _ </dev/tty || true
+}
+
+# --- Create wizard --------------------------------------------------------
+create_wizard() {
+  local name sel h backend=libvirt harness="" ram=2048 vcpus=2 disk=10 share
+  local -a flags
+  # Membership test for the one-screen options checklist below.
+  has() { case " $sel " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+  name=$(wt --title "New cage" --inputbox "Name for the new cage:" 8 60 "agentcage") || return 0
+
+  # Every on/off choice on a single screen. Only the name and (if asked) the
+  # numbers need their own inputboxes -- whiptail can't mix text and checkboxes.
+  sel=$(wt --title "Set up '$name'" --checklist \
+    "Space toggles each option; Tab to the buttons, then Enter." 20 76 9 \
+    claude-code "Install the Claude Code agent"                     ON  \
+    pi          "Install the pi agent"                              OFF \
+    codex       "Install the Codex agent"                           OFF \
+    doas        "Give YOUR account root in the cage (agent never)"  ON  \
+    autostart   "Attaching as the agent drops into the AI"          ON  \
+    qemu        "Use the lighter qemu backend (default: libvirt)"   OFF \
+    lan         "Let the cage reach your LAN and this host"         OFF \
+    share       "Share a host folder (weakens isolation)"           OFF \
+    advanced    "Change RAM / vCPUs / disk (default 2048/2/10)"      OFF) || return 0
+  sel=$(printf '%s' "$sel" | tr -d '"')
+
+  for h in claude-code pi codex; do
+    if has "$h"; then harness="${harness:+$harness,}$h"; fi
+  done
+  [ -n "$harness" ] || harness=none
+  if has qemu; then backend=qemu; fi
+
+  if has advanced; then
+    ram=$(wt --title "Resources" --inputbox "RAM in MB:" 8 60 "$ram") || return 0
+    vcpus=$(wt --title "Resources" --inputbox "vCPUs:" 8 60 "$vcpus") || return 0
+    disk=$(wt --title "Resources" --inputbox "Disk in GB:" 8 60 "$disk") || return 0
+  fi
+
+  flags=(--name "$name" --backend "$backend" --harness "$harness"
+         --ram "$ram" --vcpus "$vcpus" --disk "$disk")
+  if has doas; then flags+=(--doas); else flags+=(--no-doas); fi
+  if has lan; then flags+=(--allow-lan); else flags+=(--no-lan); fi
+  if [ "$harness" != none ]; then
+    if has autostart; then flags+=(--autostart); else flags+=(--no-autostart); fi
+  fi
+  if has share; then
+    share=$(wt --title "Shared folder" --inputbox "Folder to share:" 8 60 "/mnt/acage-shared/$name") || return 0
+    flags+=(--share "$share")
+  else
+    flags+=(--no-share)
+  fi
+  # -y accepts the pinned image fingerprint without a second prompt.
+  flags+=(-y)
+
+  wt --title "Confirm" --yesno "Create this cage?\n\n  acage create ${flags[*]}" 15 74 || return 0
+  clear
+  echo "+ acage create ${flags[*]}"; echo
+  # Talk to the real terminal so the install's prompts (API key, deploy key,
+  # "Connect now?") and any ssh it starts work, and the menu survives after.
+  "$ACAGE" create "${flags[@]}" </dev/tty >/dev/tty 2>&1 || echo "create failed (see output above)" >/dev/tty
+  pause
+}
+
+# --- Manage existing cages ------------------------------------------------
+manage_menu() {
+  local rows sel action
+  local -a items
+  rows=$("$ACAGE" list 2>/dev/null | tail -n +2 | awk 'NF')
+  if [ -z "$rows" ]; then
+    wt --title "Manage" --msgbox "No cages yet.\n\nCreate one from the main menu." 9 50
+    return 0
+  fi
+  while read -r name state _; do items+=("$name" "$state"); done <<<"$rows"
+
+  sel=$(wt --title "Manage cages" --menu "Pick a cage:" 17 60 8 "${items[@]}") || return 0
+
+  action=$(wt --title "$sel" --menu "What do you want to do?" 17 62 6 \
+    attach  "Log in (asks: agent or you)" \
+    work    "Two panes: agent + you (tmux)" \
+    start   "Start the cage" \
+    stop    "Stop the cage" \
+    console "Boot / serial console" \
+    delete  "Delete the cage and its disk") || return 0
+
+  case "$action" in
+    attach|work|console)
+      clear; "$ACAGE" "$action" "$sel" </dev/tty >/dev/tty 2>&1 || true; pause ;;
+    start|stop)
+      clear; echo "+ acage $action $sel"; echo
+      "$ACAGE" "$action" "$sel" </dev/tty >/dev/tty 2>&1 || true; pause ;;
+    delete)
+      if wt --title "Delete" --yesno "Delete '$sel' and its disk? This can't be undone." 9 60; then
+        clear; "$ACAGE" delete "$sel" -y </dev/tty >/dev/tty 2>&1 || true; pause
+      fi ;;
+  esac
+}
+
+# --- Main loop ------------------------------------------------------------
+main() {
+  local choice
+  while :; do
+    choice=$(wt --title "acage" --menu "" 12 50 3 \
+      create "Create a new cage" \
+      manage "Attach / manage cages" \
+      quit   "Quit") || break
+    case "$choice" in
+      create) create_wizard ;;
+      manage) manage_menu ;;
+      quit)   break ;;
+    esac
+  done
+  clear
+}
+
+main
