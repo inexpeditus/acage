@@ -48,7 +48,7 @@ _acage() {
   if [[ "$cur" == -* ]]; then
     local flags="--backend --pool-dir -y --yes -n --dry-run -v --verbose -h --help"
     case "$cmd" in
-      install|create) flags+=" --name --user --harness --share --password --no-doas --allow-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
+      install|create) flags+=" --name --user --harness --share --password --no-doas --autostart --no-autostart --allow-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
       attach|ssh) flags+=" --agent --user" ;;
       push) flags+=" --agent --user --to" ;;
     esac

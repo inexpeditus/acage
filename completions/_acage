@@ -63,6 +63,8 @@ case $state in
           '--share[Share a host folder]:dir:_files -/' \
           '--password[Set a password for your account]' \
           '--no-doas[Do not give your account root either]' \
+          '--autostart[Log in as the agent straight into its harness]' \
+          '--no-autostart[Do not auto-launch the harness on login]' \
           '--allow-lan[Let the VM reach your LAN and host]' \
           '--ram[RAM in MB]:mb:' \
           '--vcpus[vCPUs]:n:' \

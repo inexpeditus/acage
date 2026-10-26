@@ -116,6 +116,23 @@ test_userdata_harnesses() {
   assert_not_out "npm, install"
 }
 
+test_userdata_autostart() {
+  load_libs
+  # With a harness and autostart on, the agent's interactive login launches it
+  # (non-exec, so quitting drops to a shell).
+  HARNESS=claude-code AUTOSTART=1
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_out 'command -v claude >/dev/null 2>&1 && claude'
+  # Off (the default) -> no autostart line.
+  AUTOSTART=0
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_not_out "command -v claude"
+  # No harness -> nothing to launch, even with autostart on.
+  HARNESS=none AUTOSTART=1
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_not_out "command -v"
+}
+
 test_userdata_with_share() {
   load_libs
   SHARE_DIR=$TMP

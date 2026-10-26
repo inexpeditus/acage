@@ -38,6 +38,7 @@ GUEST_DOAS=1
 GUEST_PW_HASH=""
 ASK_PW=0
 HARNESS=claude-code
+AUTOSTART=0
 SHARE_DIR=""
 SHARE_CREATED=0
 ALLOW_LAN=0
@@ -49,7 +50,7 @@ ASSUME_YES=0
 NO_WAIT=0
 BACKEND=${AGENTCAGE_BACKEND:-libvirt}
 NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; POOL_SET=0
-HARNESS_SET=0; SHARE_SET=0; LAN_SET=0
+HARNESS_SET=0; SHARE_SET=0; LAN_SET=0; AUTOSTART_SET=0
 SSH_ARGS=()
 PUSH_PATHS=()
 PUSH_TO=.
@@ -91,6 +92,9 @@ Options for install/create:
   --password        Set a password for your account (asked, hidden). doas
                     then asks for it; without one doas needs no password.
   --no-doas         Don't give your account root either
+  --autostart       Log in as the agent straight into its harness; quit it for
+                    a shell. Asked interactively (default yes); --no-autostart
+                    turns it off.
   --allow-lan       Let the VM reach your local network and this host
                     (default: internet only)
   --ram MB          RAM in MB (default: $RAM_MB)
@@ -149,6 +153,8 @@ while [ $# -gt 0 ]; do
     --password) ASK_PW=1; shift ;;
     --doas) GUEST_DOAS=1; DOAS_SET=1; shift ;;
     --no-doas) GUEST_DOAS=0; DOAS_SET=1; shift ;;
+    --autostart) AUTOSTART=1; AUTOSTART_SET=1; shift ;;
+    --no-autostart) AUTOSTART=0; AUTOSTART_SET=1; shift ;;
     --no-wait) NO_WAIT=1; shift ;;
     -n|--dry-run) DRY_RUN=1; shift ;;
     -v|--verbose) VERBOSE=1; shift ;;
@@ -219,6 +225,7 @@ prompt_settings() {
   [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_agentcage.pub, created if missing)" "$SSH_PUBKEY"
   [ "$DOAS_SET" = 1 ]    || { if yesno "Give your account '$GUEST_USER' root in the VM (doas)? The agent never gets it" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
   [ "$LAN_SET" = 1 ]     || { yesno "Let the VM reach your local network and this host? (default: internet only)" n && ALLOW_LAN=1 || true; }
+  [ "$AUTOSTART_SET" = 1 ] || [ "$HARNESS" = none ] || { yesno "Log straight into the agent's AI when you attach as the agent? (quit it for a shell)" y && AUTOSTART=1 || true; }
   if [ "$SHARE_SET" != 1 ] && yesno "Share a host folder with the VM? (weakens isolation; you'll see a warning)" n; then
     ask SHARE_DIR "Folder to share" "$(share_default_dir "$VM")"
   fi

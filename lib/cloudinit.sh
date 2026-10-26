@@ -69,12 +69,21 @@ EOF
   for h in $(harness_list); do harness_profile_lines "$h" | sed 's/^/      /'; done
   # Per-user settings such as API keys (written later, mode 600).
   echo '      [ -r "$HOME/.config/agentcage/env" ] && . "$HOME/.config/agentcage/env"'
-  # Login message for interactive logins, depending on the account.
-  cat <<'EOF'
-      case $- in *i*)
-        if [ "$(id -un)" = agent ]; then cat /etc/agentcage/motd.agent; else cat /etc/agentcage/motd.user; fi 2>/dev/null ;;
-      esac
-EOF
+  # Login message for interactive logins. When autostart is on, the agent
+  # account also launches its harness here; quit the harness to drop to a shell
+  # (and `acage ssh NAME -- sh` gives a plain shell without launching it).
+  local hcmd=""
+  if [ "${AUTOSTART:-0}" = 1 ]; then for h in $(harness_list); do hcmd=$(harness_command "$h"); break; done; fi
+  echo '      case $- in *i*)'
+  if [ -n "$hcmd" ]; then
+    echo '        if [ "$(id -un)" = agent ]; then'
+    echo '          cat /etc/agentcage/motd.agent 2>/dev/null'
+    echo "          command -v $hcmd >/dev/null 2>&1 && $hcmd"
+    echo '        else cat /etc/agentcage/motd.user 2>/dev/null; fi ;;'
+  else
+    echo '        if [ "$(id -un)" = agent ]; then cat /etc/agentcage/motd.agent; else cat /etc/agentcage/motd.user; fi 2>/dev/null ;;'
+  fi
+  echo '      esac'
   # The messages themselves (base64, so any text survives YAML), and an empty
   # /etc/motd so Alpine's default greeting doesn't show as well.
   cat <<EOF

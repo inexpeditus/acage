@@ -14,6 +14,7 @@
 .Op Fl -disk Ar GB
 .Op Fl -harness Ar list
 .Op Fl -no-doas
+.Op Fl -autostart
 .Op Fl -no-wait
 .Op Fl -password
 .Op Fl -pool-dir Ar dir
@@ -239,7 +240,7 @@ Comma-separated agent harnesses to install:
 or
 .Cm none .
 The default is
-.Cm pi .
+.Cm claude-code .
 .It Fl -name Ar name
 Name of the machine, also its hostname and SSH alias.
 It can also be given as the argument after the command.
@@ -253,6 +254,16 @@ its log while waiting for first boot, instead of waiting silently.
 .It Fl -no-doas
 Do not give the invoking user's account root either, so nobody in the
 machine can become root.
+.It Fl -autostart , Fl -no-autostart
+When logging in interactively as the
+.Ql agent
+account, launch its harness straight away; quit the harness to drop to a shell,
+or use
+.Ic acage ssh Ar name Fl - Ar sh
+for a shell without launching it.
+Asked interactively (default yes) when a harness is installed;
+.Fl -no-autostart
+turns it off.
 .It Fl -password
 Ask for a password for the invoking user's account.
 Only its SHA-512 crypt hash is put in the machine.
