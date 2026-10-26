@@ -8,9 +8,8 @@ typeset -A opt_args
 
 local -a commands
 commands=(
-  'install:Download and verify the image, then create and boot a VM'
   'image:Download and verify the latest Alpine cloud image only'
-  'create:Create and boot a VM from the downloaded image'
+  'create:Download and verify the image, then create and boot a VM'
   'attach:Log in to a VM (starting it first if stopped)'
   'work:Open two side-by-side shells (agent + you) in tmux'
   'push:Copy files or folders into the agent home'
@@ -55,17 +54,19 @@ case $state in
           '--to[Copy into DIR inside the home]:dir:' \
           '1:vm:_acage_vms' \
           '*:file:_files' ;;
-      install|create)
+      create)
         _arguments \
           '--name[VM name]:name:' \
           '--user[Your account in the VM]:user:' \
           '--harness[Agent harness(es)]:harness:(claude-code pi codex none)' \
           '--share[Share a host folder]:dir:_files -/' \
+          '--no-share[Do not share a folder (default)]' \
           '--password[Set a password for your account]' \
           '--no-doas[Do not give your account root either]' \
           '--autostart[Log in as the agent straight into its harness]' \
           '--no-autostart[Do not auto-launch the harness on login]' \
           '--allow-lan[Let the VM reach your LAN and host]' \
+          '--no-lan[Keep the VM off your LAN and host (default)]' \
           '--ram[RAM in MB]:mb:' \
           '--vcpus[vCPUs]:n:' \
           '--disk[Disk size in GB]:gb:' \

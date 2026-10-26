@@ -55,7 +55,7 @@ trap cleanup EXIT
 
 echo "== Creating $VM with the $BACKEND backend (a few minutes)"
 if ac delete "$VM" -y >/dev/null 2>&1; then echo "   (removed an old $VM first)"; fi
-if ! out=$(ac install "$VM" --user "$ME" --harness none --share "$SHARE" -y </dev/null 2>&1); then
+if ! out=$(ac create "$VM" --user "$ME" --harness none --share "$SHARE" -y </dev/null 2>&1); then
   bad "create the VM" "$out"; exit 1
 fi
 warnings=$(sed 's/\x1b\[[0-9;]*m//g' <<<"$out" | grep '^warning:' | grep -v -e '--yes given')

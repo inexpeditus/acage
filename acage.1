@@ -6,7 +6,7 @@
 .Nd run coding agents in disposable Alpine Linux virtual machines
 .Sh SYNOPSIS
 .Nm
-.Cm install | create
+.Cm create
 .Op Ar name
 .Op Fl nvy
 .Op Fl -allow-lan
@@ -78,11 +78,6 @@ is given.
 .Pp
 The commands are as follows:
 .Bl -tag -width Ds
-.It Cm install Op Ar name
-Run
-.Cm image ,
-then
-.Cm create .
 .It Cm image
 Make sure the newest Alpine UEFI cloud image is in the cache
 .Pq Pa ~/.cache/agentcage/images ,
@@ -100,7 +95,9 @@ unless
 is given.
 If any check fails, the download is discarded.
 .It Cm create Op Ar name
-Create and boot a machine from the downloaded image.
+Make sure the verified image is cached (as
+.Cm image
+does), then create and boot a machine from it.
 Unless
 .Fl -no-wait
 is given,
@@ -192,8 +189,6 @@ used.
 .El
 .Pp
 Settings for
-.Cm install
-and
 .Cm create
 that are not given as options are asked for when running in a terminal;
 otherwise the defaults below are used.
@@ -212,6 +207,9 @@ or as the invoking user's account.
 .It Fl -allow-lan
 Leave the firewall out, so the machine can reach the local network and the
 host.
+.It Fl -no-lan
+Keep the machine off your LAN and the host, the default; pins it so it is not
+asked for interactively.
 .It Fl -to Ar dir
 With
 .Cm push :
@@ -307,6 +305,9 @@ It refuses
 the home directory, anything containing it, and credential directories
 such as
 .Pa ~/.ssh .
+.It Fl -no-share
+Do not share a folder, the default; pins it so it is not asked for
+interactively.
 A missing
 .Ar dir
 is created after the confirmation.
@@ -317,8 +318,6 @@ The default is
 generated if missing.
 .It Fl -user Ar user
 With
-.Cm install
-and
 .Cm create :
 name of the invoking user's account in the machine; anything but
 .Ql agent .
@@ -385,7 +384,7 @@ also fails when the machine never becomes reachable over SSH.
 .Sh EXAMPLES
 Create a machine with Claude Code and connect to it:
 .Pp
-.Dl $ acage install mybox --harness claude-code
+.Dl $ acage create mybox --harness claude-code
 .Dl $ acage attach mybox
 .Pp
 Give the agent a project to work on:

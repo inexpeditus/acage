@@ -14,7 +14,7 @@ _acage() {
     cword=$COMP_CWORD
   fi
 
-  local commands="install image create attach work push ssh start stop console list delete uninstall help"
+  local commands="image create attach work push ssh start stop console list delete uninstall help"
   local name_cmds=" attach work push ssh start stop console delete "
 
   # Values expected right after certain flags.
@@ -48,7 +48,7 @@ _acage() {
   if [[ "$cur" == -* ]]; then
     local flags="--backend --pool-dir -y --yes -n --dry-run -v --verbose -h --help"
     case "$cmd" in
-      install|create) flags+=" --name --user --harness --share --password --no-doas --autostart --no-autostart --allow-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
+      create) flags+=" --name --user --harness --share --no-share --password --no-doas --autostart --no-autostart --allow-lan --no-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
       attach|ssh) flags+=" --agent --user" ;;
       push) flags+=" --agent --user --to" ;;
     esac
