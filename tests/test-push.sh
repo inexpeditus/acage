@@ -49,15 +49,22 @@ test_push_refuses_home_and_credentials() {
   [ -z "$(ls -A "$REMOTE")" ] || fail "something was copied anyway"
 }
 
-test_push_warns_about_secrets() {
+test_push_warns_and_confirms_about_secrets() {
   fake_vm_home
   mkdir -p "$TMP/src/app"
   touch "$TMP/src/app/.env" "$TMP/src/app/id_ed25519" "$TMP/src/app/main.c"
-  OUT=$(push_paths box agent . "$TMP/src/app" 2>&1)
+  # Non-interactive without --yes: it warns, lists the matches, and refuses.
+  OUT=$( (ASSUME_YES=0; push_paths box agent . "$TMP/src/app") 2>&1 ) && fail "expected push to refuse"
   assert_out "These look like secrets"
   assert_out "app/.env"
   assert_out "app/id_ed25519"
   assert_not_out "main.c"
+  assert_out "pass --yes"
+  [ -e "$REMOTE/app/.env" ] && fail "nothing should have been pushed" || true
+  # With --yes: still warns, but proceeds, so the files arrive.
+  ( ASSUME_YES=1; push_paths box agent . "$TMP/src/app" ) 2>/dev/null
+  [ -f "$REMOTE/app/.env" ] || fail "expected .env to be pushed under --yes"
+  [ -f "$REMOTE/app/main.c" ] || fail "expected main.c to be pushed under --yes"
 }
 
 test_push_command_line() {

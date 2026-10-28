@@ -152,7 +152,8 @@ The host starts the copy and data only flows into the machine, over SSH.
 Symbolic links are copied as links, not followed.
 The home directory and credential directories such as
 .Pa ~/.ssh
-are refused, and files that look like secrets are warned about.
+are refused, and files that look like secrets prompt for confirmation
+.Pf ( Fl -yes No to skip the prompt).
 There is no command to copy files out of a machine.
 .It Cm ssh Ar name Op Fl - Ar command ...
 Log in as

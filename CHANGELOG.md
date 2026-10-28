@@ -72,6 +72,10 @@ change behaviour.
 
 ### Fixed
 
+- `acage push` now **prompts for confirmation** when a file you're pushing
+  looks like a secret (`.env`, `*.pem`, `id_ed25519`, …) instead of only
+  printing a warning that could scroll past. `--yes` proceeds; a
+  non-interactive run without it refuses.
 - `acage uninstall` now also removes VMs and the pool on the *other* backend,
   not just the selected one. `acage quick` always uses qemu, so uninstalling
   from the libvirt default used to leave those VMs behind; now one `uninstall`

@@ -25,8 +25,15 @@ push_check() {
   esac
   secrets=$(find "$p" \( -name '.env' -o -name '.env.*' -o -name 'id_rsa' -o -name 'id_ed25519' -o -name 'id_ecdsa' \
     -o -name '*.pem' -o -name '*.key' -o -name '.netrc' -o -name '.npmrc' \) -print 2>/dev/null | head -5)
-  [ -z "$secrets" ] || warn "These look like secrets, and the agent can read everything you push:
+  if [ -n "$secrets" ]; then
+    warn "These look like secrets, and the agent can read everything you push:
 $(printf '%s\n' "$secrets" | sed 's/^/    /')"
+    # A secret match is a speed bump, not a silent warning: confirm before
+    # sending. --yes proceeds; a non-interactive run without it refuses.
+    [ "${ASSUME_YES:-0}" = 1 ] && return 0
+    interactive || die "Refusing to push files that look like secrets; pass --yes to send them anyway"
+    yesno "Push these anyway?" n || die "Aborted; nothing was pushed"
+  fi
 }
 
 # push_paths VM USER DEST PATH... -> copies each PATH into DEST (relative to
