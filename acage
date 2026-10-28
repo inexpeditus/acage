@@ -398,7 +398,8 @@ cmd_ssh() {
   backend_locate "$VM"
   sync_ssh_config_host "$VM"
   [ "$WHO" != user ] || user=$(vm_user "$VM")
-  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
+  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" \
+    -o "HostKeyAlias=$VM" -o StrictHostKeyChecking=accept-new "$VM" ${SSH_ARGS[@]+"${SSH_ARGS[@]}"}
 }
 
 cmd_push() {
@@ -440,8 +441,9 @@ cmd_work() {
   sync_ssh_config_host "$VM"
   local user a_ssh y_ssh sess
   user=$(vm_user "$VM")
-  a_ssh="ssh -o HostName=$SSH_HOST -o Port=$SSH_PORT -o User=$AGENT_USER $VM"
-  y_ssh="ssh -o HostName=$SSH_HOST -o Port=$SSH_PORT -o User=$user $VM"
+  local hk="-o HostKeyAlias=$VM -o StrictHostKeyChecking=accept-new"
+  a_ssh="ssh -o HostName=$SSH_HOST -o Port=$SSH_PORT -o User=$AGENT_USER $hk $VM"
+  y_ssh="ssh -o HostName=$SSH_HOST -o Port=$SSH_PORT -o User=$user $hk $VM"
   sess="acage-$VM"
   if [ -n "${TMUX:-}" ]; then
     # Already inside tmux: open the pair as a new window in the current session.
@@ -527,31 +529,60 @@ acage_vm_names() {
 # generated SSH key, all its SSH config entries and host keys, the image cache,
 # the settings and the pool directory. It never removes host packages; it
 # prints a command to remove the ones nothing else needs at the end.
+# Lists VM names on the qemu backend (file-based, so no root and no prompt),
+# in a subshell so the current backend's functions and variables are untouched.
+# Used only to show them before an uninstall confirms.
+uninstall_qemu_vm_names() {
+  ( . "$LIB_DIR/backend-qemu.sh"; backend_init; pool_pick_default
+    backend_list 2>/dev/null | awk 'NR>1 && $1 ~ /^[a-z]/ {print $1}' )
+}
+
+# Destroys every VM on BACKEND (the argument) and removes its pool, in a
+# subshell that sources that backend. Run for the backend the user did NOT
+# select, so 'acage uninstall' clears what the other backend made -- notably
+# 'acage quick', which always uses qemu. VM teardown comes from the backend's
+# own list, so it works even when the acage config is already gone.
+uninstall_sweep_backend() {
+  local be=$1 vm
+  ( . "$LIB_DIR/backend-$be.sh"; backend_init; pool_pick_default
+    for vm in $(backend_list 2>/dev/null | awk 'NR>1 && $1 ~ /^[a-z]/ {print $1}'); do
+      valid_vm_name "$vm" && backend_delete "$vm" || true
+    done
+    [ ! -e "$POOL_DIR" ] || prun rm -rf "$POOL_DIR"
+    [ "$be" != qemu ] || run rm -rf "/tmp/agentcage-$(id -u)" )
+}
+
 cmd_uninstall() {
-  local vms vm key=$HOME/.ssh/id_agentcage other=qemu
+  local vms vm key=$HOME/.ssh/id_agentcage other=qemu qvms=""
   [ "$BACKEND" = qemu ] && other=libvirt
   vms=$(acage_vm_names)
+  # The other backend is swept too; for qemu we can list its VMs cheaply.
+  [ "$other" = qemu ] && qvms=$(uninstall_qemu_vm_names)
   {
     echo "This removes everything acage set up on this computer:"
-    [ -z "$vms" ] || { echo "  - these VMs on the $BACKEND backend, and their disks:"; echo "$vms" | sed 's/^/        /'; }
+    [ -z "$vms" ]  || { echo "  - these VMs on the $BACKEND backend, and their disks:"; echo "$vms" | sed 's/^/        /'; }
+    [ -z "$qvms" ] || { echo "  - these VMs on the qemu backend, and their disks:"; echo "$qvms" | sed 's/^/        /'; }
+    [ "$other" = qemu ] || echo "  - any VMs acage made on the $other backend, and their disks"
     echo "  - every 'Host' entry acage added to ~/.ssh/config, and their host keys"
     echo "  - the generated SSH key $key(.pub)"
     echo "  - the image cache $(dirname "$IMAGE_CACHE")"
     echo "  - the settings $(dirname "$CONFIG_FILE")"
-    echo "  - the pool directory $POOL_DIR"
+    echo "  - the pool directory $POOL_DIR (and the $other backend's)"
     echo "The acage program and your host packages (QEMU, libvirt, ...) are NOT removed"
     echo "here; a command to remove the unneeded packages is printed at the end."
-    echo "(VMs made with --backend $other, if any, aren't included; run 'acage uninstall --backend $other' too.)"
   } >&2
   confirm_destroy "Uninstalling" "Nothing was removed"
   for vm in $vms; do
     valid_vm_name "$vm" || { warn "skipping unexpected VM name '$vm'"; continue; }
     purge_vm "$vm"
   done
-  run rm -f "$key" "$key.pub"
-  run rm -rf "$(dirname "$IMAGE_CACHE")"
   prun rm -rf "$POOL_DIR"
   [ "$BACKEND" != qemu ] || run rm -rf "/tmp/agentcage-$(id -u)"
+  # Sweep the other backend's VMs and pool (after the confirmation, so any sudo
+  # it needs comes only once the user has agreed).
+  uninstall_sweep_backend "$other"
+  run rm -f "$key" "$key.pub"
+  run rm -rf "$(dirname "$IMAGE_CACHE")"
   run rm -rf "$(dirname "$CONFIG_FILE")"   # last: purge_vm above reads/writes it
   log "Removed acage's data"
   uninstall_pkg_hint

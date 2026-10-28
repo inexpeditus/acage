@@ -72,6 +72,14 @@ change behaviour.
 
 ### Fixed
 
+- `acage uninstall` now also removes VMs and the pool on the *other* backend,
+  not just the selected one. `acage quick` always uses qemu, so uninstalling
+  from the libvirt default used to leave those VMs behind; now one `uninstall`
+  clears both backends.
+- `attach`, `ssh` and `work` no longer show SSH's "authenticity of host can't
+  be established" prompt when reconnecting to an existing VM: the host key is
+  pinned to the VM name and a first/unknown key is accepted automatically (a
+  *changed* key is still refused).
 - `attach`, `ssh` and `push` refresh the VM's saved `~/.ssh/config` address
   when it has changed (e.g. a new DHCP lease after a network reset), so plain
   `ssh <name>` keeps working too; they already connected to the current

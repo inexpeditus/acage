@@ -161,7 +161,13 @@ attach() {
     esac
   fi
   [ "$who" = user ] || user=$AGENT_USER
-  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" "$vm"
+  # HostKeyAlias pins the known_hosts entry to the VM name (not the reused
+  # 127.0.0.1:port), and accept-new records a first/unknown key without the
+  # interactive "authenticity can't be established" prompt while still refusing
+  # a CHANGED key. So re-attaching to an existing VM is never blocked by a
+  # prompt, even if its ssh-config/known_hosts entry was removed meanwhile.
+  exec ssh -o "HostName=$SSH_HOST" -o "Port=$SSH_PORT" -o "User=$user" \
+    -o "HostKeyAlias=$vm" -o StrictHostKeyChecking=accept-new "$vm"
 }
 
 # provision_api_keys VM -> asks once per provider and stores the key for each harness.
