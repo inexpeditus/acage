@@ -14,14 +14,14 @@ _acage() {
     cword=$COMP_CWORD
   fi
 
-  local commands="image create attach work push ssh start stop console list delete uninstall help"
+  local commands="image create quick bake attach work push ssh start stop console list delete uninstall help"
   local name_cmds=" attach work push ssh start stop console delete "
 
   # Values expected right after certain flags.
   case "$prev" in
     --backend) COMPREPLY=($(compgen -W "libvirt qemu" -- "$cur")); return ;;
     --harness) COMPREPLY=($(compgen -W "claude-code pi codex none" -- "$cur")); return ;;
-    --ssh-pubkey|--share|--pool-dir|--to)
+    --ssh-pubkey|--share|--pool-dir|--to|--agent-md)
       if declare -F _filedir >/dev/null 2>&1; then _filedir
       else COMPREPLY=($(compgen -f -- "$cur")); fi
       return ;;
@@ -48,7 +48,9 @@ _acage() {
   if [[ "$cur" == -* ]]; then
     local flags="--backend --pool-dir -y --yes -n --dry-run -v --verbose -h --help"
     case "$cmd" in
-      create) flags+=" --name --user --harness --share --no-share --password --no-doas --autostart --no-autostart --allow-lan --no-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
+      create) flags+=" --name --user --harness --agent-md --share --no-share --password --no-doas --autostart --no-autostart --allow-lan --no-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
+      quick) flags+=" --name --user --harness --agent-md --no-doas --no-autostart --allow-lan --ram --vcpus --disk --ssh-pubkey" ;;
+      bake) flags+=" --harness --disk" ;;
       attach|ssh) flags+=" --agent --user" ;;
       push) flags+=" --agent --user --to" ;;
     esac

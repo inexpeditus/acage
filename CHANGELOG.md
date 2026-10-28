@@ -24,6 +24,16 @@ change behaviour.
   once in a throwaway VM, strips its per-instance identity (host keys,
   machine-id) so every cage stays unique, and `create` uses the golden image
   automatically when one is cached for that harness set.
+- `acage quick [name]`: one command, no questions — create a VM with the
+  defaults (the claude-code harness and autostart) and log straight in to the
+  agent with its harness running. Uses the qemu backend unless `--backend` is
+  given, reuses a cached golden image, and re-attaches if the VM already exists.
+- Your account in the VM now has read/write access to the agent's files (a
+  POSIX ACL that new files inherit), so you can inspect and edit everything the
+  agent works on. The reverse stays blocked: the agent still can't read your
+  home, run anything as you, or touch the firewall.
+- `--agent-md FILE`: install FILE in the agent's home as both `CLAUDE.md` and
+  `AGENTS.md`, so the agent's harness picks up your instructions.
 
 ### Changed
 

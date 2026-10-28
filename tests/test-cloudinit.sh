@@ -142,6 +142,37 @@ test_userdata_with_share() {
   yaml_check 'any("mount /home/agent/shared" == c for c in d["runcmd"])'
 }
 
+test_userdata_agent_access() {
+  load_libs
+  OUT=$(cloudinit_userdata "$KEY")
+  # Both homes stay private, and your account gets rw to the agent's files via
+  # an ACL (plus a default ACL so new files inherit it). The reverse direction
+  # is never granted.
+  assert_out "chmod 700 /home/roy /home/agent"
+  # r-x on the home itself (keeps sshd StrictModes happy), rwX as a default ACL
+  # so new files the agent creates are yours.
+  assert_out "setfacl -m u:roy:rx /home/agent"
+  assert_out "setfacl -d -m u:roy:rwX /home/agent"
+  assert_not_out "u:agent:"
+  yaml_check '"acl" in set(d["packages"])'
+}
+
+test_userdata_agent_md() {
+  load_libs
+  printf '# Be careful\n' >"$TMP/ctx.md"
+  AGENT_MD="$TMP/ctx.md"
+  OUT=$(cloudinit_userdata "$KEY")
+  # Installed into the agent's home under both names, owned by the agent.
+  assert_out "path: /home/agent/CLAUDE.md"
+  assert_out "path: /home/agent/AGENTS.md"
+  assert_out "owner: agent:agent"
+  yaml_check 'sum(1 for f in d["write_files"] if f["path"] in ("/home/agent/CLAUDE.md","/home/agent/AGENTS.md")) == 2'
+  # Off by default: no such files without the flag.
+  AGENT_MD=""
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_not_out "/home/agent/CLAUDE.md"
+}
+
 test_bake_userdata() {
   load_libs
   HARNESS=claude-code

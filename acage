@@ -43,13 +43,14 @@ SHARE_DIR=""
 SHARE_CREATED=0
 ALLOW_LAN=0
 WHO=""
+AGENT_MD=""
 SSH_PUBKEY=""
 DRY_RUN=${DRY_RUN:-0}
 VERBOSE=${VERBOSE:-0}
 ASSUME_YES=0
 NO_WAIT=0
 GOLDEN=0
-BACKEND=${AGENTCAGE_BACKEND:-libvirt}
+BACKEND=${AGENTCAGE_BACKEND:-libvirt}; BACKEND_SET=0
 NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; POOL_SET=0
 HARNESS_SET=0; SHARE_SET=0; LAN_SET=0; AUTOSTART_SET=0
 SSH_ARGS=()
@@ -63,6 +64,9 @@ Usage: acage <command> [name] [options]
 Commands:
   image            Download and verify the latest Alpine cloud image only
   create           Download and verify the image, then create and boot a VM
+  quick [NAME]     One command, no questions: create a VM with the defaults
+                   (claude-code, autostart) and log straight into the agent.
+                   Reuses a cached golden image; re-attaches if NAME exists.
   bake             Pre-build a reusable image with the packages and harness
                    baked in, so later creates skip the apk/npm install
   attach NAME      Log in to a VM (starting it first if stopped), asking
@@ -87,6 +91,8 @@ Options for create:
   --user NAME       Your account in the VM (default: your username)
   --harness LIST    Agent harness(es) to install, comma-separated:
                     claude-code, pi, codex, or none (default: $HARNESS)
+  --agent-md FILE   Install FILE in the agent's home as both CLAUDE.md and
+                    AGENTS.md, so its harness picks up your instructions
   --share DIR       Share host folder DIR with the VM at ~/shared (created if
                     missing; asked interactively with the default
                     /mnt/acage-shared/NAME).
@@ -150,6 +156,7 @@ while [ $# -gt 0 ]; do
     --allow-lan) ALLOW_LAN=1; LAN_SET=1; shift ;;
     --no-lan) ALLOW_LAN=0; LAN_SET=1; shift ;;
     --harness) need_value "$@"; HARNESS=$2; HARNESS_SET=1; shift 2 ;;
+    --agent-md) need_value "$@"; AGENT_MD=$2; shift 2 ;;
     --share) need_value "$@"; SHARE_DIR=$2; SHARE_SET=1; shift 2 ;;
     --no-share) SHARE_DIR=""; SHARE_SET=1; shift ;;
     --ram) need_value "$@"; RAM_MB=$2; RAM_SET=1; shift 2 ;;
@@ -157,7 +164,7 @@ while [ $# -gt 0 ]; do
     --disk) need_value "$@"; DISK_GB=$2; DISK_SET=1; shift 2 ;;
     --pool-dir) need_value "$@"; POOL_DIR=$2; POOL_SET=1; shift 2 ;;
     --ssh-pubkey) need_value "$@"; SSH_PUBKEY=$2; KEY_SET=1; shift 2 ;;
-    --backend) need_value "$@"; BACKEND=$2; shift 2 ;;
+    --backend) need_value "$@"; BACKEND=$2; BACKEND_SET=1; shift 2 ;;
     --password) ASK_PW=1; shift ;;
     --doas) GUEST_DOAS=1; DOAS_SET=1; shift ;;
     --no-doas) GUEST_DOAS=0; DOAS_SET=1; shift ;;
@@ -200,6 +207,9 @@ done
 # Baking always uses the qemu backend: it needs no sudo and produces a plain
 # qcow2 that either backend can then base cages on.
 [ "$cmd" != bake ] || BACKEND=qemu
+# 'quick' is a zero-prompt one-liner, so it defaults to the qemu backend (no
+# sudo); pass --backend to override.
+[ "$cmd" != quick ] || [ "$BACKEND_SET" = 1 ] || BACKEND=qemu
 case "$BACKEND" in
   libvirt|qemu) ;;
   *) die "Unknown backend '$BACKEND' (libvirt or qemu)" ;;
@@ -306,8 +316,39 @@ cmd_bake() {
   log "Golden image ready: $(basename "$golden") ($(du -h "$golden" 2>/dev/null | cut -f1)); 'acage create --harness $HARNESS' will now use it."
 }
 
+# One command, no questions: create a VM with the defaults (the claude-code
+# harness, autostart on, image fingerprint accepted), then log straight into
+# the agent with its harness running. Reuses a cached golden image, so a repeat
+# launch is quick, and re-attaches if the VM already exists. Uses the qemu
+# backend unless --backend says otherwise.
+cmd_quick() {
+  ASSUME_YES=1; QUICK=1
+  [ "$HARNESS_SET" = 1 ]   || HARNESS=claude-code
+  [ "$AUTOSTART_SET" = 1 ] || AUTOSTART=1
+  [ "$USER_SET" = 1 ]      || GUEST_USER=$(id -un | tr 'A-Z' 'a-z')
+  [ "$NAME_SET" = 1 ]      || VM=quick
+  check_name
+  if backend_exists "$VM"; then
+    log "'$VM' already exists; attaching to the '$AGENT_USER' account"
+  else
+    harness_validate
+    if ! dry; then
+      want xorriso; want ssh-keygen; want curl; want gpg; backend_check_deps
+    fi
+    check_space "$DISK_GB" "a ${DISK_GB} GB VM disk"
+    check_space 1 "the Alpine image" "$IMAGE_CACHE"
+    pool_remember
+    cmd_image
+    cmd_create || return 1
+  fi
+  dry && return 0
+  WHO=agent
+  cmd_attach
+}
+
 cmd_create() {
   if backend_exists "$VM"; then die "VM '$VM' already exists (acage delete $VM)"; fi
+  [ -z "$AGENT_MD" ] || [ -f "$AGENT_MD" ] || die "--agent-md: file not found: $AGENT_MD"
   [ -z "$SHARE_DIR" ] || { share_confirm; share_create; }
   if [ "$ASK_PW" = 1 ]; then
     interactive || die "--password needs a terminal to type the password in"
@@ -588,6 +629,7 @@ case "$cmd" in
     if ! dry; then want xorriso; want curl; want gpg; backend_check_deps; fi
     check_space 1 "the Alpine image" "$IMAGE_CACHE"
     cmd_bake ;;
+  quick) cmd_quick ;;
   attach) need_name; cmd_attach ;;
   work) need_name; cmd_work ;;
   push) need_name; cmd_push ;;

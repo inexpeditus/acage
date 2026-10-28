@@ -102,6 +102,23 @@ EOF
     permissions: "0644"
     content: ""
 EOF
+  # Optional agent instructions (--agent-md FILE): dropped into the agent's home
+  # as both CLAUDE.md and AGENTS.md, so whichever harness runs picks it up.
+  # Deferred so /home/$AGENT_USER exists by the time it is written.
+  if [ -n "${AGENT_MD:-}" ]; then
+    local md f
+    md=$(base64 -w0 "$AGENT_MD")
+    for f in CLAUDE.md AGENTS.md; do
+      cat <<EOF
+  - path: /home/$AGENT_USER/$f
+    owner: $AGENT_USER:$AGENT_USER
+    permissions: "0644"
+    defer: true
+    encoding: b64
+    content: $md
+EOF
+    done
+  fi
   # Root access for you: a rule appended to /etc/doas.conf itself (not
   # /etc/doas.d), deferred until after the doas package is installed so apk
   # doesn't replace it. With a password, doas asks for it ('persist' caches
@@ -148,8 +165,23 @@ runcmd:
   # hostname, which otherwise shows up as '(none)' in the shell prompt.
   - hostname $VM
   - echo $VM >/etc/hostname
-  # Neither account can look into the other's home.
+  # Both homes are private (mode 700), so neither account can look into the
+  # other's by default. Then give YOUR account access to the agent's files with
+  # POSIX ACLs, so you can inspect and edit everything the agent works on. The
+  # reverse stays blocked: the agent still can't read your home, run anything as
+  # you, or touch the firewall.
+  #
+  #  - On the home directory itself you only get r-x (enter and list): a named
+  #    ACL raises the dir's ACL mask into the group mode bits, and sshd's
+  #    StrictModes refuses key logins for an account whose home is group-
+  #    WRITABLE. r-x keeps it unwritable, so the agent can still log in, while
+  #    ~/.ssh (created at boot, before this) never inherits an ACL and stays
+  #    strict.
+  #  - A default ACL of rwX means everything the agent creates afterwards -- its
+  #    actual work -- is yours to read and write.
   - chmod 700 /home/$GUEST_USER /home/$AGENT_USER
+  - setfacl -m u:$GUEST_USER:rx /home/$AGENT_USER
+  - setfacl -d -m u:$GUEST_USER:rwX /home/$AGENT_USER
 EOF
   if [ "$ALLOW_LAN" != 1 ]; then
     cat <<EOF

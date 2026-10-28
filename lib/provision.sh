@@ -235,6 +235,11 @@ provision_vm() {
     fi
   done
 
+  # 'acage quick' wants no prompts: the SSH config entry and host key are set up
+  # above, so just return and let the caller attach (and log in / set keys from
+  # inside the agent's own harness).
+  [ "${QUICK:-0}" != 1 ] || return 0
+
   if ! interactive; then
     echo >&2
     image_next_steps

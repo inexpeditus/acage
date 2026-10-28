@@ -261,3 +261,14 @@ test_start_unknown_vm() {
   acage_run start nope --backend qemu --pool-dir "$POOL"
   assert_rc 1; assert_out "No VM named 'nope'"
 }
+
+test_quick_defaults() {
+  # One-liner with no name: defaults to the VM name 'quick', the qemu backend
+  # (SSH on localhost), the claude-code harness and autostart.
+  acage_run quick --pool-dir "$POOL" --disk 1 -n
+  assert_rc 0
+  assert_out "vms/quick"
+  assert_out "127.0.0.1"
+  assert_out '[npm, install, -g, "@anthropic-ai/claude-code"]'
+  assert_out "command -v claude >/dev/null 2>&1 && claude"
+}

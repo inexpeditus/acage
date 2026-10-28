@@ -107,6 +107,22 @@ entry to
 .Pa ~/.ssh/config ,
 and, when run from a terminal, offers to store API keys in the machine,
 to generate a GitHub deploy key in it, and to connect.
+.It Cm quick Op Ar name
+One command with no questions: create a machine with the defaults (the
+.Cm claude-code
+harness and autostart on, the image fingerprint accepted), then log straight
+in to the
+.Ql agent
+account with its harness running.
+Uses the qemu backend unless
+.Fl -backend
+is given, reuses a cached golden image (see
+.Cm bake )
+so a repeat launch is quick, and simply re-attaches if a machine named
+.Ar name
+(default
+.Ql quick )
+already exists.
 .It Cm attach Ar name
 Log in to the machine, starting it first if it is stopped, asking whether as
 .Ql agent
@@ -239,6 +255,15 @@ or
 .Cm none .
 The default is
 .Cm claude-code .
+.It Fl -agent-md Ar file
+Install
+.Ar file
+in the agent's home as both
+.Pa CLAUDE.md
+and
+.Pa AGENTS.md ,
+so the agent's harness picks up your instructions.
+Off unless given.
 .It Fl -name Ar name
 Name of the machine, also its hostname and SSH alias.
 It can also be given as the argument after the command.

@@ -10,6 +10,8 @@ local -a commands
 commands=(
   'image:Download and verify the latest Alpine cloud image only'
   'create:Download and verify the image, then create and boot a VM'
+  'quick:One command: create with defaults and log in to the agent'
+  'bake:Pre-build a reusable image with the packages and harness baked in'
   'attach:Log in to a VM (starting it first if stopped)'
   'work:Open two side-by-side shells (agent + you) in tmux'
   'push:Copy files or folders into the agent home'
@@ -59,6 +61,7 @@ case $state in
           '--name[VM name]:name:' \
           '--user[Your account in the VM]:user:' \
           '--harness[Agent harness(es)]:harness:(claude-code pi codex none)' \
+          '--agent-md[Install a CLAUDE.md/AGENTS.md in the agent home]:file:_files' \
           '--share[Share a host folder]:dir:_files -/' \
           '--no-share[Do not share a folder (default)]' \
           '--password[Set a password for your account]' \
@@ -72,5 +75,22 @@ case $state in
           '--disk[Disk size in GB]:gb:' \
           '--ssh-pubkey[Public key to authorize]:file:_files' \
           '--no-wait[Return without waiting for first boot]' ;;
+      quick)
+        _arguments \
+          '--name[VM name]:name:' \
+          '--user[Your account in the VM]:user:' \
+          '--harness[Agent harness(es)]:harness:(claude-code pi codex none)' \
+          '--agent-md[Install a CLAUDE.md/AGENTS.md in the agent home]:file:_files' \
+          '--no-doas[Do not give your account root either]' \
+          '--no-autostart[Do not auto-launch the harness on login]' \
+          '--allow-lan[Let the VM reach your LAN and host]' \
+          '--ram[RAM in MB]:mb:' \
+          '--vcpus[vCPUs]:n:' \
+          '--disk[Disk size in GB]:gb:' \
+          '--ssh-pubkey[Public key to authorize]:file:_files' ;;
+      bake)
+        _arguments \
+          '--harness[Agent harness(es)]:harness:(claude-code pi codex none)' \
+          '--disk[Disk size in GB]:gb:' ;;
     esac ;;
 esac
