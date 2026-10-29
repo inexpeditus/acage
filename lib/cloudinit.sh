@@ -11,6 +11,33 @@
 
 AGENT_USER=agent
 
+# cloudinit_packages -> the apk packages a from-scratch cage installs at first
+# boot (one per line, deduped), after honoring the two package flags:
+#   --no-packages  (NO_PACKAGES=1): install nothing
+#   --skip-packages LIST (SKIP_PACKAGES): drop the named packages
+# The base dev tools, doas (unless --no-doas), nftables (unless --allow-lan) and
+# each harness's extra packages all flow through here, so the flags can reach
+# every one of them.
+cloudinit_packages() {
+  [ "${NO_PACKAGES:-0}" != 1 ] || return 0
+  local h skip
+  skip=" $(printf '%s' "${SKIP_PACKAGES:-}" | tr ',' ' ') "
+  {
+    alpine_base_packages
+    [ "$GUEST_DOAS" != 1 ] || alpine_doas_packages
+    [ "$ALLOW_LAN" = 1 ] || echo nftables
+    for h in $(harness_list); do harness_packages "$h"; done
+  } | tr ' ' '\n' | awk -v skip="$skip" 'NF && !seen[$0]++ && index(skip, " " $0 " ") == 0'
+}
+
+# cloudinit_has_package NAME -> true if NAME survives the flags into the list.
+# A golden image is baked with the full package set, so the current package
+# flags don't change what's already present there.
+cloudinit_has_package() {
+  [ "${GOLDEN:-0}" != 1 ] || return 0
+  cloudinit_packages | grep -qxF -- "$1"
+}
+
 # Validate everything that ends up inside the generated YAML.
 cloudinit_validate() {
   [ -n "$GUEST_USER" ] || die "--user is required (the account to create in the VM)"
@@ -36,6 +63,17 @@ EOF
 cloudinit_userdata() {
   local key=$1 p h rule uid
   uid=$(id -u)
+  # The package flags can switch off features that depend on a package. Say so,
+  # once, before writing the seed (to stderr, so it never lands in the YAML).
+  if [ "${GOLDEN:-0}" = 1 ]; then
+    [ "${NO_PACKAGES:-0}" != 1 ] && [ -z "${SKIP_PACKAGES// }" ] \
+      || warn "--no-packages/--skip-packages are ignored here: this cage is built from a prebuilt golden image whose packages are already baked in."
+  else
+    [ "$ALLOW_LAN" = 1 ] || cloudinit_has_package nftables \
+      || warn "The in-VM firewall needs the nftables package, which a package flag excluded: the cage's LAN/host block will NOT be applied. Pass --allow-lan to acknowledge, or stop excluding nftables."
+    [ -z "$(harness_list)" ] || cloudinit_has_package npm \
+      || warn "The chosen harness needs npm, which a package flag excluded: no harness will be installed in this cage."
+  fi
   cat <<EOF
 #cloud-config
 hostname: $VM
@@ -149,14 +187,14 @@ EOF
 EOF
   fi
   # In golden mode the packages are already baked in; skip installing them.
+  # Otherwise emit the flag-filtered list, and only when it is non-empty
+  # (--no-packages, or --skip-packages covering everything, leaves it empty).
   if [ "${GOLDEN:-0}" != 1 ]; then
-    echo "packages:"
-    {
-      alpine_base_packages
-      [ "$GUEST_DOAS" != 1 ] || alpine_doas_packages
-      [ "$ALLOW_LAN" = 1 ] || echo nftables
-      for h in $(harness_list); do harness_packages "$h"; done
-    } | tr ' ' '\n' | awk 'NF && !seen[$0]++ {print "  - " $0}'
+    local pkgs; pkgs=$(cloudinit_packages)
+    if [ -n "$pkgs" ]; then
+      echo "packages:"
+      printf '%s\n' "$pkgs" | awk '{print "  - " $0}'
+    fi
   fi
   # runcmd runs at the end of first boot, after packages and deferred files.
   cat <<EOF
@@ -183,15 +221,18 @@ runcmd:
   - setfacl -m u:$GUEST_USER:rx /home/$AGENT_USER
   - setfacl -d -m u:$GUEST_USER:rwX /home/$AGENT_USER
 EOF
-  if [ "$ALLOW_LAN" != 1 ]; then
+  # Load the firewall only when nftables will actually be present (a package
+  # flag can exclude it); the warning about that is emitted up in cloudinit_userdata.
+  if [ "$ALLOW_LAN" != 1 ] && cloudinit_has_package nftables; then
     cat <<EOF
   - rc-update add nftables default
   - rc-service nftables restart
 EOF
   fi
   [ -z "$SHARE_DIR" ] || share_guest_runcmd "$AGENT_USER"
-  # In golden mode the harness is already installed; skip the npm install.
-  if [ "${GOLDEN:-0}" != 1 ]; then
+  # In golden mode the harness is already installed; skip the npm install. From
+  # scratch it needs npm, which a package flag can exclude.
+  if [ "${GOLDEN:-0}" != 1 ] && cloudinit_has_package npm; then
     for h in $(harness_list); do
       p=$(harness_npm_package "$h")
       if harness_needs_scripts "$h"; then

@@ -44,6 +44,8 @@ SHARE_CREATED=0
 ALLOW_LAN=0
 WHO=""
 AGENT_MD=""
+NO_PACKAGES=0
+SKIP_PACKAGES=""
 SSH_PUBKEY=""
 DRY_RUN=${DRY_RUN:-0}
 VERBOSE=${VERBOSE:-0}
@@ -91,6 +93,14 @@ Options for create:
   --user NAME       Your account in the VM (default: your username)
   --harness LIST    Agent harness(es) to install, comma-separated:
                     claude-code, pi, codex, or none (default: $HARNESS)
+  --no-packages     Install no apk packages in the VM (no dev tools, no
+                    harness). Disables the in-VM firewall unless --allow-lan,
+                    since that needs nftables. For a bare cage you set up
+                    yourself; ignored when a prebuilt golden image is used.
+  --skip-packages LIST
+                    Don't install these packages (comma/space-separated;
+                    repeatable). Excluding nftables drops the firewall;
+                    excluding npm drops the harness.
   --agent-md FILE   Install FILE in the agent's home as both CLAUDE.md and
                     AGENTS.md, so its harness picks up your instructions
   --share DIR       Share host folder DIR with the VM at ~/shared (created if
@@ -156,6 +166,8 @@ while [ $# -gt 0 ]; do
     --allow-lan) ALLOW_LAN=1; LAN_SET=1; shift ;;
     --no-lan) ALLOW_LAN=0; LAN_SET=1; shift ;;
     --harness) need_value "$@"; HARNESS=$2; HARNESS_SET=1; shift 2 ;;
+    --no-packages) NO_PACKAGES=1; shift ;;
+    --skip-packages) need_value "$@"; SKIP_PACKAGES="$SKIP_PACKAGES $2"; shift 2 ;;
     --agent-md) need_value "$@"; AGENT_MD=$2; shift 2 ;;
     --share) need_value "$@"; SHARE_DIR=$2; SHARE_SET=1; shift 2 ;;
     --no-share) SHARE_DIR=""; SHARE_SET=1; shift ;;
@@ -284,6 +296,10 @@ cmd_image() {
 # (host keys, machine-id) and powers off; its disk is then flattened and cached.
 cmd_bake() {
   local golden tmpvm="acage-bake-$$" n
+  # A golden image exists to carry the full package set; filtering it would
+  # defeat the purpose, so the package flags aren't honored here.
+  [ "$NO_PACKAGES" = 0 ] && [ -z "${SKIP_PACKAGES// }" ] \
+    || die "--no-packages/--skip-packages aren't supported for 'bake': a golden image installs the full package set. Use them on 'create' instead."
   cmd_image                                  # make sure the verified base is cached
   golden=$(alpine_golden_name "$IMAGE_ARCH" "$HARNESS")
   [ -n "$golden" ] || die "No base image is cached"

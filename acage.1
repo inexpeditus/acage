@@ -265,6 +265,23 @@ and
 .Pa AGENTS.md ,
 so the agent's harness picks up your instructions.
 Off unless given.
+.It Fl -no-packages
+Install no apk packages in the VM: no development tools and no harness.
+Because the in-VM firewall needs
+.Xr nftables 8 ,
+this also turns the firewall off unless
+.Fl -allow-lan
+is given.
+Intended for a bare cage you provision yourself; ignored when a cage is built
+from a prebuilt golden image, whose packages are already baked in.
+.It Fl -skip-packages Ar list
+Do not install the named packages (comma- or space-separated, and the flag may
+be repeated).
+Excluding
+.Cm nftables
+drops the firewall; excluding
+.Cm npm
+drops the harness.
 .It Fl -name Ar name
 Name of the machine, also its hostname and SSH alias.
 It can also be given as the argument after the command.

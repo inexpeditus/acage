@@ -25,7 +25,7 @@ _acage() {
       if declare -F _filedir >/dev/null 2>&1; then _filedir
       else COMPREPLY=($(compgen -f -- "$cur")); fi
       return ;;
-    --name|--user|--ram|--vcpus|--disk) return ;;  # free-form value
+    --name|--user|--ram|--vcpus|--disk|--skip-packages) return ;;  # free-form value
   esac
 
   # Locate the subcommand (first non-option word) and where it sits.
@@ -48,7 +48,7 @@ _acage() {
   if [[ "$cur" == -* ]]; then
     local flags="--backend --pool-dir -y --yes -n --dry-run -v --verbose -h --help"
     case "$cmd" in
-      create) flags+=" --name --user --harness --agent-md --share --no-share --password --no-doas --autostart --no-autostart --allow-lan --no-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
+      create) flags+=" --name --user --harness --no-packages --skip-packages --agent-md --share --no-share --password --no-doas --autostart --no-autostart --allow-lan --no-lan --ram --vcpus --disk --ssh-pubkey --no-wait" ;;
       quick) flags+=" --name --user --harness --agent-md --no-doas --no-autostart --allow-lan --ram --vcpus --disk --ssh-pubkey" ;;
       bake) flags+=" --harness --disk" ;;
       attach|ssh) flags+=" --agent --user" ;;

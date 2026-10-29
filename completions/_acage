@@ -61,6 +61,8 @@ case $state in
           '--name[VM name]:name:' \
           '--user[Your account in the VM]:user:' \
           '--harness[Agent harness(es)]:harness:(claude-code pi codex none)' \
+          '--no-packages[Install no apk packages (no dev tools, no harness)]' \
+          '--skip-packages[Do not install these packages (comma/space list)]:packages:' \
           '--agent-md[Install a CLAUDE.md/AGENTS.md in the agent home]:file:_files' \
           '--share[Share a host folder]:dir:_files -/' \
           '--no-share[Do not share a folder (default)]' \

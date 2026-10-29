@@ -33,6 +33,46 @@ test_userdata_defaults() {
   yaml_check 'd["disable_root"] is True'
 }
 
+test_userdata_no_packages() {
+  load_libs
+  # --no-packages: no apk install at all, no harness npm, no firewall load.
+  OUT=$( NO_PACKAGES=1 cloudinit_userdata "$KEY" 2>/dev/null )
+  assert_not_out "packages:"
+  assert_not_out "npm, install"
+  assert_not_out "rc-update add nftables"
+}
+
+test_userdata_skip_packages() {
+  load_libs
+  # --skip-packages drops the named packages but keeps the rest.
+  OUT=$( SKIP_PACKAGES="vim tmux" cloudinit_userdata "$KEY" 2>/dev/null )
+  assert_out "  - git"
+  assert_not_out "  - vim"
+  assert_not_out "  - tmux"
+  yaml_check '"git" in set(d["packages"]) and {"vim","tmux"}.isdisjoint(set(d["packages"]))'
+}
+
+test_userdata_skip_nftables_drops_firewall() {
+  load_libs
+  OUT=$( SKIP_PACKAGES="nftables" cloudinit_userdata "$KEY" 2>/dev/null )
+  assert_not_out "  - nftables"
+  assert_not_out "rc-update add nftables"
+}
+
+test_userdata_skip_npm_drops_harness() {
+  load_libs
+  OUT=$( SKIP_PACKAGES="npm" cloudinit_userdata "$KEY" 2>/dev/null )
+  assert_not_out "npm, install"
+}
+
+test_userdata_package_flags_warn() {
+  load_libs
+  # Dropping nftables/npm warns (on stderr) that the firewall and harness go off.
+  OUT=$( NO_PACKAGES=1 ALLOW_LAN=0 cloudinit_userdata "$KEY" 2>&1 >/dev/null )
+  assert_out "nftables"
+  assert_out "npm"
+}
+
 test_userdata_two_accounts() {
   load_libs
   OUT=$(cloudinit_userdata "$KEY")

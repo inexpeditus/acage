@@ -36,6 +36,10 @@ change behaviour.
   `AGENTS.md`, so the agent's harness picks up your instructions.
 - `tmux` is installed in every VM, so you can keep your own shell in a second
   pane beside the running agent.
+- `--no-packages` and `--skip-packages LIST`: control which apk packages a cage
+  installs at first boot — none at all, or all but the named ones. Excluding
+  `nftables` turns the in-VM firewall off (acage warns, and `--allow-lan` is
+  then required to acknowledge it); excluding `npm` drops the harness.
 
 ### Changed
 
