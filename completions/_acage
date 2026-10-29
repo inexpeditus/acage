@@ -13,7 +13,7 @@ commands=(
   'quick:One command: create with defaults and log in to the agent'
   'bake:Pre-build a reusable image with the packages and harness baked in'
   'attach:Log in to a VM (starting it first if stopped)'
-  'work:Open two side-by-side shells (agent + you) in tmux'
+  'tmux:Open two side-by-side shells (agent + you) in tmux'
   'push:Copy files or folders into the agent home'
   'ssh:Run a command in a VM'
   'start:Start a stopped VM'
@@ -47,7 +47,7 @@ case $state in
     _describe -t commands 'acage command' commands ;;
   args)
     case $line[1] in
-      attach|work|ssh|start|stop|console|delete)
+      attach|tmux|ssh|start|stop|console|delete)
         _acage_vms ;;
       push)
         _arguments \

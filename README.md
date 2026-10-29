@@ -68,7 +68,7 @@ $ acage push <path> copy files/dirs from host into the cage (the agent's home by
 **Ergonomics**
 
 - Press play - `acage quick`: one command, zero prompts, drops you into the agent
-- `acage work` - tmux split: agent | you
+- `acage tmux` - split shells: agent | you
 - `--agent-md` - seed a CLAUDE.md / AGENTS.md
 - `--autostart`, harness choice (claude-code/pi/codex/none)
 - auto `~/.ssh/config` entry (plain `ssh <name>` works), refreshed on IP change

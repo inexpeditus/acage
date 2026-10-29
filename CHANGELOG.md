@@ -39,6 +39,8 @@ change behaviour.
 
 ### Changed
 
+- The `acage work` command is renamed to `acage tmux`: it opens a tmux session
+  with the agent and your own shell side by side.
 - `acage attach` now starts a stopped VM first instead of failing with "not
   running"; you just exit the machine when you're done.
 - Your account in the VM now defaults to your host username without asking, so

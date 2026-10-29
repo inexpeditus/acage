@@ -71,7 +71,7 @@ Commands:
                    baked in, so later creates skip the apk/npm install
   attach NAME      Log in to a VM (starting it first if stopped), asking
                    whether as the agent or as you
-  work NAME        Open two side-by-side shells in tmux: the agent (left) and
+  tmux NAME        Open two side-by-side shells in tmux: the agent (left) and
                    you (right). Starts the VM first if stopped. Needs tmux.
   push NAME PATH...  Copy files or folders from here into the agent's home
   ssh NAME [-- CMD]  Run CMD in a VM (as the agent unless --user)
@@ -429,13 +429,13 @@ cmd_attach() {
   attach "$VM" "$WHO"
 }
 
-# cmd_work -> one command, two shells: a host-side tmux with the agent account on
+# cmd_tmux -> one command, two shells: a host-side tmux with the agent account on
 # the left (run the AI) and your account on the right (doas), each its own SSH
 # into the cage. Splitting on the host (not inside the VM) is what lets the two
 # panes be different accounts.
-cmd_work() {
+cmd_tmux() {
   backend_exists "$VM" || die "No VM named '$VM' (acage list)"
-  need tmux "the two-pane 'acage work' session; or use 'acage attach'"
+  need tmux "the two-pane 'acage tmux' session; or use 'acage attach'"
   ensure_up "$VM"
   backend_locate "$VM"
   sync_ssh_config_host "$VM"
@@ -663,7 +663,7 @@ case "$cmd" in
     cmd_bake ;;
   quick) cmd_quick ;;
   attach) need_name; cmd_attach ;;
-  work) need_name; cmd_work ;;
+  tmux) need_name; cmd_tmux ;;
   push) need_name; cmd_push ;;
   ssh) need_name; cmd_ssh ;;
   start) need_name; backend_start "$VM" ;;
