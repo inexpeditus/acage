@@ -71,7 +71,7 @@ $ acage push <path> copy files/dirs from host into the cage (the agent's home by
 - `acage tmux` - split shells: agent | you
 - `--agent-md` - seed a CLAUDE.md / AGENTS.md
 - `--autostart`, harness choice (claude-code/pi/codex/none)
-- auto `~/.ssh/config` entry (plain `ssh <name>` works), refreshed on IP change
+- automated SSH config + fix-ups, _refreshed IPs caused by host reboots, network resets or new DHCP leases are reconfigured for you and you're welcome_
 - deps: reports all missing host tools at once with one apt/pacman line, never auto-installs
 - `-n` dry-run, `-v` verbose, bash + zsh completion, man page
 
