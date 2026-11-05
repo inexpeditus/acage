@@ -42,10 +42,11 @@ harness_command() {
 }
 
 # Extra Alpine packages. Claude Code's musl build needs the C++ runtime and,
-# on Alpine, the system ripgrep instead of its bundled glibc one.
+# on Alpine, the system ripgrep instead of its bundled glibc one. Its Bash tool
+# refuses to run without bash or zsh, and Alpine only has ash.
 harness_packages() {
   case "$1" in
-    claude-code) echo "libgcc libstdc++ ripgrep" ;;
+    claude-code) echo "libgcc libstdc++ ripgrep bash" ;;
     codex) echo "ripgrep" ;;
   esac
 }

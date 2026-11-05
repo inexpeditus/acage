@@ -83,6 +83,8 @@ change behaviour.
 
 ### Fixed
 
+- Claude Code's Bash tool works in cages: claude-code cages now install
+  `bash`, since Claude Code refuses to run commands with Alpine's `ash`.
 - `acage push` now **prompts for confirmation** when a file you're pushing
   looks like a secret (`.env`, `*.pem`, `id_ed25519`, …) instead of only
   printing a warning that could scroll past. `--yes` proceeds; a

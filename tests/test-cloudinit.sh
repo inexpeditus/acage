@@ -178,7 +178,7 @@ test_userdata_harnesses() {
   assert_out "export USE_BUILTIN_RIPGREP=0"
   assert_not_out "pi-coding-agent"
   [ "$(printf '%s\n' "$OUT" | grep -c '^  - ripgrep$')" = 1 ] || fail "ripgrep listed more than once"
-  yaml_check '{"libgcc","libstdc++","ripgrep"} <= set(d["packages"])'
+  yaml_check '{"libgcc","libstdc++","ripgrep","bash"} <= set(d["packages"])'
   HARNESS=none
   OUT=$(cloudinit_userdata "$KEY")
   assert_not_out "npm, install"
