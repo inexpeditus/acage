@@ -73,7 +73,7 @@ test_dry_run_libvirt_changes_nothing() {
   assert_out "#cloud-config"
   [ ! -e "$POOL" ] || fail "dry run created $POOL"
   [ ! -e "$HOME/.ssh" ] || fail "dry run created ~/.ssh"
-  [ ! -e "$XDG_CONFIG_HOME/agentcage" ] || fail "dry run saved settings"
+  [ ! -e "$XDG_CONFIG_HOME/acage" ] || fail "dry run saved settings"
 }
 
 test_dry_run_qemu_command_line() {
@@ -91,7 +91,7 @@ test_dry_run_qemu_with_share_uses_9p() {
   mkdir "$TMP/proj"
   acage_run create box --user roy --backend qemu --pool-dir "$POOL" --disk 1 --share "$TMP/proj" -n -y
   assert_rc 0
-  assert_out "-virtfs local,path=$TMP/proj,mount_tag=agentcage,security_model=none"
+  assert_out "-virtfs local,path=$TMP/proj,mount_tag=acage,security_model=none"
   assert_out "!! Shared folder: $TMP/proj"
 }
 
@@ -122,10 +122,10 @@ test_delete_asks_and_can_be_declined() {
 
 test_delete_offers_the_shared_folder_only_if_acage_made_it() {
   have script || return 0
-  mkdir -p "$XDG_CONFIG_HOME/agentcage" "$TMP/made" "$TMP/mine"
+  mkdir -p "$XDG_CONFIG_HOME/acage" "$TMP/made" "$TMP/mine"
   touch "$TMP/made/a" "$TMP/mine/b"
   fake_qemu_vm box; fake_qemu_vm box2
-  printf 'share_box=%s\nshare_created_box=1\nshare_box2=%s\n' "$TMP/made" "$TMP/mine" >"$XDG_CONFIG_HOME/agentcage/config"
+  printf 'share_box=%s\nshare_created_box=1\nshare_box2=%s\n' "$TMP/made" "$TMP/mine" >"$XDG_CONFIG_HOME/acage/config"
   acage_tty 'y\ny\n' delete box --backend qemu --pool-dir "$POOL"
   assert_rc 0; assert_out "Also delete the shared folder $TMP/made"; assert_out "Deleted the shared folder"
   [ ! -e "$TMP/made" ] || fail "shared folder not deleted after yes"
@@ -136,13 +136,13 @@ test_delete_offers_the_shared_folder_only_if_acage_made_it() {
 }
 
 test_delete_cleans_leftovers_of_a_failed_create() {
-  mkdir -p "$HOME/.ssh" "$XDG_CONFIG_HOME/agentcage"
-  printf '# agentcage:begin ghost\nHost ghost\n# agentcage:end ghost\n' >"$HOME/.ssh/config"
-  printf 'user_ghost=roy\n' >"$XDG_CONFIG_HOME/agentcage/config"
+  mkdir -p "$HOME/.ssh" "$XDG_CONFIG_HOME/acage"
+  printf '# acage:begin ghost\nHost ghost\n# acage:end ghost\n' >"$HOME/.ssh/config"
+  printf 'user_ghost=roy\n' >"$XDG_CONFIG_HOME/acage/config"
   acage_run delete ghost --backend qemu --pool-dir "$POOL" -y
   assert_rc 0; assert_out "left over"; assert_out "Deleted ghost"
   [ ! -s "$HOME/.ssh/config" ] || fail "leftover SSH entry kept: $(cat "$HOME/.ssh/config")"
-  [ ! -s "$XDG_CONFIG_HOME/agentcage/config" ] || fail "leftover settings kept"
+  [ ! -s "$XDG_CONFIG_HOME/acage/config" ] || fail "leftover settings kept"
   acage_run delete ghost --backend qemu --pool-dir "$POOL" -y
   assert_rc 1; assert_out "No VM named 'ghost'"
 }
@@ -158,21 +158,21 @@ test_delete_needs_confirmation_then_cleans_up() {
   mkdir -p "$HOME/.ssh"
   printf 'Host other\n    User x\n' >"$HOME/.ssh/config"
   cp "$HOME/.ssh/config" "$TMP/config.orig"
-  printf '\n# agentcage:begin box\nHost box\n    Port 2222\n# agentcage:end box\n' >>"$HOME/.ssh/config"
+  printf '\n# acage:begin box\nHost box\n    Port 2222\n# acage:end box\n' >>"$HOME/.ssh/config"
 
   acage_run delete box --backend qemu --pool-dir "$POOL"
   assert_rc 1; assert_out "Deleting needs confirmation"
   [ -d "$POOL/vms/box" ] || fail "VM was deleted without confirmation"
 
-  mkdir -p "$XDG_CONFIG_HOME/agentcage"
-  printf 'user_box=roy\nshare_box=%s\nshare_created_box=1\nuser_other=x\n' "$TMP/share" >"$XDG_CONFIG_HOME/agentcage/config"
+  mkdir -p "$XDG_CONFIG_HOME/acage"
+  printf 'user_box=roy\nshare_box=%s\nshare_created_box=1\nuser_other=x\n' "$TMP/share" >"$XDG_CONFIG_HOME/acage/config"
   mkdir "$TMP/share"; touch "$TMP/share/work.txt"
   printf 'box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIbox\nother ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIoth\n' >"$HOME/.ssh/known_hosts"
   acage_run delete box --backend qemu --pool-dir "$POOL" -y
   assert_rc 0
   assert_out "This deletes 'box'"
   assert_out "Deleted box"
-  assert_eq "$(cat "$XDG_CONFIG_HOME/agentcage/config")" "user_other=x"
+  assert_eq "$(cat "$XDG_CONFIG_HOME/acage/config")" "user_other=x"
   grep -q '^box ' "$HOME/.ssh/known_hosts" && fail "host key of box still in known_hosts"
   grep -q '^other ' "$HOME/.ssh/known_hosts" || fail "removed another host's key"
   # --yes never deletes the shared folder.
@@ -189,25 +189,25 @@ test_uninstall_needs_confirmation() {
 
 test_uninstall_dry_run_changes_nothing() {
   fake_qemu_vm box
-  mkdir -p "$XDG_CONFIG_HOME/agentcage"
-  printf 'user_box=roy\n' >"$XDG_CONFIG_HOME/agentcage/config"
-  cp "$XDG_CONFIG_HOME/agentcage/config" "$TMP/orig"
+  mkdir -p "$XDG_CONFIG_HOME/acage"
+  printf 'user_box=roy\n' >"$XDG_CONFIG_HOME/acage/config"
+  cp "$XDG_CONFIG_HOME/acage/config" "$TMP/orig"
   stub pacman 'exit 1'
   acage_run uninstall --backend qemu --pool-dir "$POOL" -n -y
   assert_rc 0; assert_out "removes everything acage set up"
   [ -d "$POOL/vms/box" ] || fail "dry run removed the VM"
-  cmp -s "$XDG_CONFIG_HOME/agentcage/config" "$TMP/orig" || fail "dry run changed the config"
+  cmp -s "$XDG_CONFIG_HOME/acage/config" "$TMP/orig" || fail "dry run changed the config"
 }
 
 test_uninstall_removes_all_data_and_prints_package_hint() {
   fake_qemu_vm box
   fake_qemu_vm dev
-  mkdir -p "$XDG_CONFIG_HOME/agentcage" "$HOME/.ssh" "$XDG_CACHE_HOME/agentcage/images"
-  printf 'pool_dir_qemu=%s\nuser_box=roy\nuser_dev=roy\n' "$POOL" >"$XDG_CONFIG_HOME/agentcage/config"
-  printf 'Host other\n    User x\n\n# agentcage:begin box\nHost box\n# agentcage:end box\n' >"$HOME/.ssh/config"
+  mkdir -p "$XDG_CONFIG_HOME/acage" "$HOME/.ssh" "$XDG_CACHE_HOME/acage/images"
+  printf 'pool_dir_qemu=%s\nuser_box=roy\nuser_dev=roy\n' "$POOL" >"$XDG_CONFIG_HOME/acage/config"
+  printf 'Host other\n    User x\n\n# acage:begin box\nHost box\n# acage:end box\n' >"$HOME/.ssh/config"
   printf 'box ssh-ed25519 AAAAbox\nother ssh-ed25519 AAAAoth\n' >"$HOME/.ssh/known_hosts"
-  : >"$HOME/.ssh/id_agentcage"; : >"$HOME/.ssh/id_agentcage.pub"
-  : >"$XDG_CACHE_HOME/agentcage/images/img.qcow2"
+  : >"$HOME/.ssh/id_acage"; : >"$HOME/.ssh/id_acage.pub"
+  : >"$XDG_CACHE_HOME/acage/images/img.qcow2"
   # pacman present, reporting acage + qemu-base installed and qemu-base unneeded.
   stub pacman 'case "$1 $2" in
   "-Qq acage") exit 0 ;;
@@ -225,13 +225,13 @@ esac'
   assert_out "Review the command"
   [ ! -e "$POOL/vms/box" ] || fail "VM box not removed"
   [ ! -e "$POOL/vms/dev" ] || fail "VM dev not removed"
-  [ ! -e "$XDG_CONFIG_HOME/agentcage" ] || fail "settings not removed"
-  [ ! -e "$XDG_CACHE_HOME/agentcage" ] || fail "image cache not removed"
-  [ ! -e "$HOME/.ssh/id_agentcage" ] || fail "SSH key not removed"
-  [ ! -e "$HOME/.ssh/id_agentcage.pub" ] || fail "SSH public key not removed"
+  [ ! -e "$XDG_CONFIG_HOME/acage" ] || fail "settings not removed"
+  [ ! -e "$XDG_CACHE_HOME/acage" ] || fail "image cache not removed"
+  [ ! -e "$HOME/.ssh/id_acage" ] || fail "SSH key not removed"
+  [ ! -e "$HOME/.ssh/id_acage.pub" ] || fail "SSH public key not removed"
   grep -q '^box ' "$HOME/.ssh/known_hosts" && fail "box host key kept"
   grep -q '^other ' "$HOME/.ssh/known_hosts" || fail "another host's key wrongly removed"
-  grep -q 'agentcage:begin' "$HOME/.ssh/config" && fail "agentcage SSH block kept"
+  grep -q 'acage:begin' "$HOME/.ssh/config" && fail "acage SSH block kept"
   grep -q 'Host other' "$HOME/.ssh/config" || fail "foreign SSH entry removed"
   return 0
 }

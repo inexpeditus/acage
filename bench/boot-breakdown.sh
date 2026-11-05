@@ -6,7 +6,7 @@ set -euo pipefail
 
 VM=${1:-benchvm}
 SSHOPT="-F $HOME/.ssh/config -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
-LOG="$HOME/.local/share/agentcage/vms/$VM/console.log"
+LOG="$HOME/.local/share/acage/vms/$VM/console.log"
 now()  { date +%s.%N; }
 d()    { awk -v a="$1" -v b="$2" 'BEGIN{printf "%.1f", b-a}'; }
 

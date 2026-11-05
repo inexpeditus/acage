@@ -25,7 +25,7 @@ image_confirm_key() {
   {
     echo "Signature is valid and made by this $label image-signing key:"
     echo "    $(fpr_pretty "$fpr")"
-    echo "The key ships with agentcage; compare it with $url"
+    echo "The key ships with acage; compare it with $url"
   } >&2
   [ "$ASSUME_YES" = 1 ] && return 0
   interactive || { echo "Not a terminal: pass --yes to accept the fingerprint shown above." >&2; return 1; }
@@ -36,13 +36,13 @@ image_confirm_key() {
 # Public key that will be authorized for the guest user (generated if missing).
 # Callers capture stdout as the path, so all messages here go to stderr.
 image_pubkey_file() {
-  local pub=${SSH_PUBKEY:-$HOME/.ssh/id_agentcage.pub}
+  local pub=${SSH_PUBKEY:-$HOME/.ssh/id_acage.pub}
   if [ ! -f "$pub" ] && [ -z "$SSH_PUBKEY" ]; then
     if dry; then
-      run ssh-keygen -t ed25519 -f "${pub%.pub}" -C agentcage -N ""
+      run ssh-keygen -t ed25519 -f "${pub%.pub}" -C acage -N ""
     else
       mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"
-      ssh-keygen -q -t ed25519 -f "${pub%.pub}" -C agentcage -N "" </dev/null >/dev/null
+      ssh-keygen -q -t ed25519 -f "${pub%.pub}" -C acage -N "" </dev/null >/dev/null
       log "Generated SSH key ${pub%.pub}"
     fi
   fi
@@ -100,7 +100,7 @@ image_prepare_disk() {
 # base the qemu VMs depend on).
 image_base_in_use() {
   local base=$1 dir d bf
-  for dir in "${POOL_DIR:-}/vms" "${XDG_DATA_HOME:-$HOME/.local/share}/agentcage/vms"; do
+  for dir in "${POOL_DIR:-}/vms" "${XDG_DATA_HOME:-$HOME/.local/share}/acage/vms"; do
     [ -d "$dir" ] || continue
     for d in "$dir"/*/disk.qcow2; do
       [ -e "$d" ] || continue

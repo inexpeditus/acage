@@ -117,10 +117,10 @@ test_userdata_login_messages() {
   OUT=$(cloudinit_userdata "$KEY")
   local f b64
   for f in agent user; do
-    b64=$(printf '%s\n' "$OUT" | awk -v p="path: /etc/agentcage/motd.$f" '$0 ~ p {g=1} g && /content:/ {print $2; exit}')
+    b64=$(printf '%s\n' "$OUT" | awk -v p="path: /etc/acage/motd.$f" '$0 ~ p {g=1} g && /content:/ {print $2; exit}')
     printf '%s' "$b64" | base64 -d | cmp -s - "$ROOT/share/motd.$f" || fail "motd.$f differs from share/motd.$f"
   done
-  assert_out 'if [ "$(id -un)" = agent ]; then cat /etc/agentcage/motd.agent'
+  assert_out 'if [ "$(id -un)" = agent ]; then cat /etc/acage/motd.agent'
   yaml_check 'any(w["path"] == "/etc/motd" and w["content"] == "" for w in d["write_files"])'
 }
 

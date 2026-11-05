@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # libvirt backend (Linux): VMs on the system connection, defined from
 # share/domain.xml, with disks in a root-owned pool directory.
-# Sourced by agentcage; every backend defines the same backend_* functions.
+# Sourced by acage; every backend defines the same backend_* functions.
 
 URI=qemu:///system
 
 backend_init() {
-  POOL_DEFAULT=/var/lib/libvirt/images/agentcage
+  POOL_DEFAULT=/var/lib/libvirt/images/acage
   POOL_ROOT=1
   SHARE_FSTYPE=virtiofs
   case "$(uname -m)" in
@@ -198,12 +198,12 @@ backend_stop() {
 }
 
 # Asks libvirt where the VM's files are, so this works whatever the pool was
-# when the VM was created. Only files agentcage made (NAME.qcow2, NAME-seed.iso)
+# when the VM was created. Only files acage made (NAME.qcow2, NAME-seed.iso)
 # are deleted.
 backend_delete() {
   local vm=$1 files f
   if backend_exists "$vm"; then
-    [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || die "'$vm' wasn't created by agentcage; not touching it"
+    [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by acage" ] || die "'$vm' wasn't created by acage; not touching it"
     files=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$1 == "file" && $4 != "-" {print $4}')
     ! backend_running "$vm" || virsh_ destroy "$vm"
     virsh_ undefine "$vm" --nvram
@@ -227,7 +227,7 @@ backend_delete() {
 backend_list() {
   local vm state disk alloc size out=""
   for vm in $(virsh_ list --all --name 2>/dev/null); do
-    [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by agentcage" ] || continue
+    [ "$(virsh_ desc "$vm" 2>/dev/null)" = "Created by acage" ] || continue
     state=$(virsh_ domstate "$vm" 2>/dev/null | head -1)
     disk=$(virsh_ domblklist "$vm" --details 2>/dev/null | awk '$3 == "vda" {print $4}')
     # The used size comes from libvirt, so listing never needs root to stat the

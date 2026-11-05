@@ -1,7 +1,7 @@
 <!--
-  libvirt domain template for agentcage VMs (Linux, libvirt backend).
+  libvirt domain template for acage VMs (Linux, libvirt backend).
 
-  agentcage fills in the name, memory, vCPU count and disk path. With a shared
+  acage fills in the name, memory, vCPU count and disk path. With a shared
   folder it fills in the folder and keeps the virtiofs filesystem device and
   the shared memory backing it needs; without one it removes both.
 
@@ -12,8 +12,8 @@
   Note: XML comments must not contain two hyphens in a row.
 -->
 <domain type="kvm">
-  <name>agentcage</name>
-  <description>Created by agentcage</description>
+  <name>acage</name>
+  <description>Created by acage</description>
   <memory unit="KiB">2097152</memory>
   <currentMemory unit="KiB">2097152</currentMemory>
   <memoryBacking>
@@ -80,7 +80,7 @@
     <filesystem type="mount" accessmode="passthrough">
       <driver type="virtiofs"/>
       <source dir="@SHARED_DIR@"/>
-      <target dir="agentcage"/>
+      <target dir="acage"/>
     </filesystem>
     <interface type="network">
       <source network="default"/>

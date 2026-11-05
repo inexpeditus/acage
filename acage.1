@@ -80,7 +80,7 @@ The commands are as follows:
 .Bl -tag -width Ds
 .It Cm image
 Make sure the newest Alpine UEFI cloud image is in the cache
-.Pq Pa ~/.cache/agentcage/images ,
+.Pq Pa ~/.cache/acage/images ,
 downloading it only when a newer release than the cached one is published.
 A download is checked against the SHA-512 checksum Alpine publishes and the
 GPG signature on it, verified in a temporary keyring against the key shipped
@@ -286,7 +286,7 @@ drops the harness.
 Name of the machine, also its hostname and SSH alias.
 It can also be given as the argument after the command.
 The default is
-.Li agentcage .
+.Li acage .
 .It Fl n , Fl -dry-run
 Print what would be changed instead of changing it.
 .It Fl v , Fl -verbose
@@ -319,15 +319,15 @@ SSH login is key-only either way.
 Where images and disks are kept.
 The choice is saved and used by later commands.
 With libvirt the default is
-.Pa /var/lib/libvirt/images/agentcage ,
+.Pa /var/lib/libvirt/images/acage ,
 or
-.Pa /home/agentcage
+.Pa /home/acage
 when
 .Pa /
 is a separate filesystem with less free space than
 .Pa /home .
 With qemu it is
-.Pa ~/.local/share/agentcage .
+.Pa ~/.local/share/acage .
 .It Fl -ram Ar MB
 Memory, at least 512.
 The default is 2048.
@@ -357,7 +357,7 @@ is created after the confirmation.
 .It Fl -ssh-pubkey Ar file
 Public key to authorize for the guest user.
 The default is
-.Pa ~/.ssh/id_agentcage.pub ,
+.Pa ~/.ssh/id_acage.pub ,
 generated if missing.
 .It Fl -user Ar user
 With
@@ -387,7 +387,7 @@ filesystem has room for the full disk size, plus 5 GB that stays free when it
 is the root filesystem.
 .Sh ENVIRONMENT
 .Bl -tag -width Ds
-.It Ev AGENTCAGE_BACKEND
+.It Ev ACAGE_BACKEND
 Backend to use when
 .Fl -backend
 is not given.
@@ -397,15 +397,15 @@ pool, as in the XDG Base Directory specification.
 .El
 .Sh FILES
 .Bl -tag -width Ds -compact
-.It Pa ~/.config/agentcage/config
+.It Pa ~/.config/acage/config
 Saved settings, such as the pool directory.
-.It Pa ~/.ssh/id_agentcage
+.It Pa ~/.ssh/id_acage
 Default SSH key.
 .It Pa ~/.ssh/config
 Each machine gets an entry between
-.Ql # agentcage:begin Ar name
+.Ql # acage:begin Ar name
 and
-.Ql # agentcage:end Ar name .
+.Ql # acage:end Ar name .
 .Cm attach ,
 .Cm ssh
 and
@@ -413,9 +413,9 @@ and
 rewrite its address when the machine's has changed, so plain
 .Ql ssh Ar name
 keeps working after a new DHCP lease.
-.It Pa /var/lib/libvirt/images/agentcage
+.It Pa /var/lib/libvirt/images/acage
 Default libvirt pool.
-.It Pa ~/.local/share/agentcage
+.It Pa ~/.local/share/acage
 Default qemu pool.
 .It Pa /mnt/acage-shared/ Ns Ar name
 Suggested shared directory.

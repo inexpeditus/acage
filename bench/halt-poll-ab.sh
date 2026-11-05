@@ -11,7 +11,7 @@ set -euo pipefail
 [ "$(id -u)" = 0 ] || { echo "run with sudo (writes a KVM module param)" >&2; exit 1; }
 
 USER_HOME=$(getent passwd "${SUDO_USER:-root}" | cut -d: -f6); USER_HOME=${USER_HOME:-/home/roy}
-PIDFILE="$USER_HOME/.local/share/agentcage/vms/benchvm/qemu.pid"
+PIDFILE="$USER_HOME/.local/share/acage/vms/benchvm/qemu.pid"
 [ -f "$PIDFILE" ] || { echo "benchvm not found/running ($PIDFILE)" >&2; exit 1; }
 P=$(cat "$PIDFILE"); HZ=$(getconf CLK_TCK)
 KNOB=/sys/module/kvm/parameters/halt_poll_ns

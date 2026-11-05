@@ -2,10 +2,10 @@
 # qemu backend (Linux without libvirt): runs QEMU directly as your user, with
 # KVM acceleration. Each VM lives in
 # $POOL_DIR/vms/NAME; SSH reaches it through a port forwarded on 127.0.0.1.
-# Sourced by agentcage; every backend defines the same backend_* functions.
+# Sourced by acage; every backend defines the same backend_* functions.
 
 backend_init() {
-  POOL_DEFAULT=${XDG_DATA_HOME:-$HOME/.local/share}/agentcage
+  POOL_DEFAULT=${XDG_DATA_HOME:-$HOME/.local/share}/acage
   POOL_ROOT=0
   DISK_OVERLAY=1   # user-owned pool: a VM disk is a copy-on-write overlay on the cached base
   SHARE_FSTYPE=9p
@@ -35,7 +35,7 @@ vm_dir() { echo "$POOL_DIR/vms/$1"; }
 # Unix socket paths must stay under ~104 bytes, which a VM directory under a
 # long home folder can exceed, so the sockets live in a short private dir.
 qemu_sock_dir() {
-  local d="/tmp/agentcage-$(id -u)"
+  local d="/tmp/acage-$(id -u)"
   if dry; then echo "$d"; return; fi
   mkdir -p -m 700 "$d" 2>/dev/null || true
   [ -d "$d" ] && [ ! -L "$d" ] && [ -O "$d" ] || die "$d is not a private directory owned by you"

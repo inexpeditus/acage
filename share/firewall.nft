@@ -1,5 +1,5 @@
 #!/usr/sbin/nft -f
-# Written by agentcage as /etc/nftables.nft in the VM.
+# Written by acage as /etc/nftables.nft in the VM.
 #
 # Lets the VM reach the internet but not your local network or the host:
 # connections to private, link-local and multicast addresses are refused.
@@ -11,7 +11,7 @@
 
 flush ruleset
 
-table inet agentcage {
+table inet acage {
 	set local4 {
 		type ipv4_addr
 		flags interval

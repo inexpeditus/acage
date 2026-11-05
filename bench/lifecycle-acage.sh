@@ -11,8 +11,8 @@ VM=${1:-benchvm}
 TMPVM=benchvm-tmp
 SSHOPT="-F $HOME/.ssh/config -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"
 CPU_JS='let x=0;for(let i=0;i<1e9;i++){x+=i};console.log(x)'
-CACHE="$HOME/.cache/agentcage/images"
-VMS="$HOME/.local/share/agentcage/vms"
+CACHE="$HOME/.cache/acage/images"
+VMS="$HOME/.local/share/acage/vms"
 
 now()  { date +%s.%N; }
 secs() { awk -v a="$1" -v b="$2" 'BEGIN{printf "%.2f", b-a}'; }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Optional shared folder between host and guest. Sourced by agentcage.
+# Optional shared folder between host and guest. Sourced by acage.
 #
 # The folder shows up in the guest at ~/shared. The libvirt backend serves it
 # with virtiofs, the qemu backend with 9p.
 
-SHARE_TAG=agentcage
+SHARE_TAG=acage
 
 # share_default_dir VM -> suggested folder.
 share_default_dir() { echo "/mnt/acage-shared/$1"; }

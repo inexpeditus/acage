@@ -15,7 +15,7 @@ test_domain_xml_without_share() {
   assert_not_out "<filesystem"
   assert_not_out "<memoryBacking>"
   assert_not_out "@DISK_PATH@"
-  assert_out "agentcage fills in the name"   # header comment untouched
+  assert_out "acage fills in the name"   # header comment untouched
   if have xmllint; then printf '%s' "$OUT" | xmllint --noout - || fail "invalid XML"; fi
 }
 
@@ -24,7 +24,7 @@ test_domain_xml_with_share_escapes_the_path() {
   DRY_RUN=1 SHARE_DIR='/srv/a & <b> "c"'
   OUT=$(lv_render_xml box /pool/box.qcow2)
   assert_out '<source dir="/srv/a &amp; &lt;b&gt; &quot;c&quot;"/>'
-  assert_out '<target dir="agentcage"/>'
+  assert_out '<target dir="acage"/>'
   assert_out "<memoryBacking>"
   if have xmllint; then printf '%s' "$OUT" | xmllint --noout - || fail "invalid XML"; fi
 }
@@ -101,7 +101,7 @@ test_claude_key_is_replaced_not_appended() {
   load_libs
   printf 'first\n' | sh -c "$(harness_store_key_script claude-code)"
   printf 'second\n' | sh -c "$(harness_store_key_script claude-code)"
-  local f=$HOME/.config/agentcage/env
+  local f=$HOME/.config/acage/env
   assert_eq "$(cat "$f")" "export ANTHROPIC_API_KEY=second"
   assert_eq "$(stat -c %a "$f")" 600
 }
@@ -118,7 +118,7 @@ test_ssh_config_block_round_trip() {
   write_ssh_config_entry vm2 2>/dev/null
   SSH_HOST=10.0.0.6 write_ssh_config_entry vm1 2>/dev/null
   grep -q '^    User agent$' "$HOME/.ssh/config" || fail "plain 'ssh vm1' should log in as agent"
-  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 2
+  assert_eq "$(grep -c '^# acage:begin' "$HOME/.ssh/config")" 2
   grep -q 'HostName 10.0.0.6' "$HOME/.ssh/config" || fail "vm1 not updated"
   assert_eq "$(stat -c %a "$HOME/.ssh/config")" 600
   # Something the user added after our blocks, ending in a blank line.
@@ -140,16 +140,16 @@ test_sync_ssh_config_host_refreshes_a_changed_address() {
   SSH_HOST=10.0.0.9
   sync_ssh_config_host box 2>/dev/null
   grep -q 'HostName 10.0.0.9' "$HOME/.ssh/config" || fail "HostName not refreshed"
-  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 1
+  assert_eq "$(grep -c '^# acage:begin' "$HOME/.ssh/config")" 1
 
   # Same address again: no rewrite, no duplicate block.
   sync_ssh_config_host box 2>/dev/null
-  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 1
+  assert_eq "$(grep -c '^# acage:begin' "$HOME/.ssh/config")" 1
   grep -q 'HostName 10.0.0.9' "$HOME/.ssh/config" || fail "HostName lost"
 
   # A VM with no entry is left alone.
   sync_ssh_config_host nosuchvm 2>/dev/null
-  assert_eq "$(grep -c '^# agentcage:begin' "$HOME/.ssh/config")" 1
+  assert_eq "$(grep -c '^# acage:begin' "$HOME/.ssh/config")" 1
 }
 
 test_ssh_config_leaves_foreign_entries_alone() {

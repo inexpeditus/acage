@@ -1,6 +1,6 @@
 # Security
 
-agentcage runs a coding agent in a virtual machine so that a mistaken,
+acage runs a coding agent in a virtual machine so that a mistaken,
 compromised or prompt-injected agent can't damage or read your computer.
 This page says what that does and doesn't protect, so you can decide what
 to trust it with.

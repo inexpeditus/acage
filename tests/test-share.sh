@@ -64,9 +64,9 @@ test_share_guest_mount_lines() {
   load_libs libvirt
   OUT=$(share_guest_runcmd roy)
   assert_out "mkdir -p /home/roy/shared"
-  assert_out "agentcage /home/roy/shared virtiofs nofail 0 0"
+  assert_out "acage /home/roy/shared virtiofs nofail 0 0"
   load_libs qemu
   OUT=$(share_guest_runcmd roy)
-  assert_out "agentcage /home/roy/shared 9p trans=virtio,version=9p2000.L"
+  assert_out "acage /home/roy/shared 9p trans=virtio,version=9p2000.L"
   assert_out "for m in 9pnet_virtio 9p;"
 }

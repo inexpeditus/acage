@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to agentcage are listed here. Versions follow
+All notable changes to acage are listed here. Versions follow
 [semantic versioning](https://semver.org/); until 1.0.0, minor versions may
 change behaviour.
 
@@ -107,7 +107,7 @@ change behaviour.
 
 ### Added
 
-- Downloaded Alpine images are cached in `~/.cache/agentcage/images` and
+- Downloaded Alpine images are cached in `~/.cache/acage/images` and
   reused instead of re-downloaded; a newer release replaces the old one, and
   a cached image is used when Alpine is unreachable.
 - An Arch Linux package (`packaging/arch/PKGBUILD`, package name `acage`).
@@ -148,7 +148,7 @@ First release.
   of home and credential folders, and matching uids on both sides.
 - Free-space checks before anything is created, a 5 GB reserve on the root
   filesystem, and a remembered pool folder that defaults to
-  `/home/agentcage` when `/` is the smaller partition.
+  `/home/acage` when `/` is the smaller partition.
 - `acage push` copies files and folders into a VM over SSH, refusing the
   home folder and credential folders and warning about likely secrets.
 - Generated `~/.ssh/config` entries. `delete` lists what it will remove, asks

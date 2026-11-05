@@ -5,7 +5,7 @@ set -euo pipefail
 
 VM=${1:-benchvm}
 SSH="ssh -F $HOME/.ssh/config -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new $VM"
-VMDIR="$HOME/.local/share/agentcage/vms/$VM"
+VMDIR="$HOME/.local/share/acage/vms/$VM"
 # The fixed CPU workload, identical to the container side.
 CPU_JS='let x=0;for(let i=0;i<1e9;i++){x+=i};console.log(x)'
 
@@ -35,7 +35,7 @@ MEM="?"
 [ -f "$VMDIR/qemu.pid" ] && MEM=$(awk -v k="$(ps -o rss= -p "$(cat "$VMDIR/qemu.pid")" 2>/dev/null || echo 0)" 'BEGIN{printf "%.0f", k/1024}')
 
 # --- disk: base image + this VM's disk -----------------------------------------
-BASE=$(du -m "$HOME"/.cache/agentcage/images/*.qcow2 2>/dev/null | awk '{s+=$1} END{printf "%d", s}')
+BASE=$(du -m "$HOME"/.cache/acage/images/*.qcow2 2>/dev/null | awk '{s+=$1} END{printf "%d", s}')
 DISK=$(du -m "$VMDIR/disk.qcow2" 2>/dev/null | awk '{printf "%d", $1}')
 
 # --- start time: stop, then boot a stopped VM until SSH answers ----------------

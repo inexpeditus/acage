@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Alpine-specific pieces: where the image comes from, how it is signed, and
-# which packages the guest gets. Sourced by agentcage.
+# which packages the guest gets. Sourced by acage.
 #
 # Alpine's official UEFI "cloudinit" qcow2 is a ready-made disk (no cloud
 # provider involved). It is signed by Alpine's cloud-image key, whose
 # fingerprint is published at https://alpinelinux.org/cloud/ and which ships
-# with agentcage as share/image-signing.asc.
+# with acage as share/image-signing.asc.
 
 ALPINE_IMAGE_BASE=https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/cloud
 ALPINE_IMAGE_KEY_FPR=F26ADFADBAE702EF7AF637459DA7EF23BFFCDF22   # Tomalok, Alpine cloud images

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# agentcage: run a coding agent in a disposable, locked-down Alpine Linux VM.
+# acage: run a coding agent in a disposable, locked-down Alpine Linux VM.
 #
 # Downloads and verifies Alpine's official cloud image, builds a first-boot
 # (cloud-init) config with your SSH key and the agent harness(es) you pick,
@@ -10,7 +10,7 @@ set -euo pipefail
 VERSION=0.2.0
 
 # Find lib/ and share/: next to this script in a checkout, or under
-# PREFIX/lib/agentcage and PREFIX/share/agentcage when installed.
+# PREFIX/lib/acage and PREFIX/share/acage when installed.
 self=${BASH_SOURCE[0]}
 while [ -L "$self" ]; do
   target=$(readlink "$self")
@@ -20,7 +20,7 @@ DIR=$(cd "$(dirname "$self")" && pwd)
 if [ -d "$DIR/lib" ]; then
   LIB_DIR=$DIR/lib; DATA_DIR=$DIR/share
 else
-  LIB_DIR=$DIR/../lib/agentcage; DATA_DIR=$DIR/../share/agentcage
+  LIB_DIR=$DIR/../lib/acage; DATA_DIR=$DIR/../share/acage
 fi
 
 for f in common pool alpine harness share cloudinit image provision push; do
@@ -28,7 +28,7 @@ for f in common pool alpine harness share cloudinit image provision push; do
   . "$LIB_DIR/$f.sh"
 done
 
-VM=agentcage
+VM=acage
 RAM_MB=2048
 VCPUS=2
 DISK_GB=10
@@ -52,7 +52,7 @@ VERBOSE=${VERBOSE:-0}
 ASSUME_YES=0
 NO_WAIT=0
 GOLDEN=0
-BACKEND=${AGENTCAGE_BACKEND:-libvirt}; BACKEND_SET=0
+BACKEND=${ACAGE_BACKEND:-libvirt}; BACKEND_SET=0
 NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; POOL_SET=0
 HARNESS_SET=0; SHARE_SET=0; LAN_SET=0; AUTOSTART_SET=0
 SSH_ARGS=()
@@ -122,7 +122,7 @@ Options for create:
   --ram MB          RAM in MB (default: $RAM_MB)
   --vcpus N         vCPUs (default: $VCPUS)
   --disk GB         Disk size in GB (default: $DISK_GB)
-  --ssh-pubkey FILE Public key to authorize (default: ~/.ssh/id_agentcage.pub,
+  --ssh-pubkey FILE Public key to authorize (default: ~/.ssh/id_acage.pub,
                     created if missing)
   --no-wait         Start the VM and return, without waiting for first boot
 
@@ -135,9 +135,9 @@ General options:
   --backend NAME    libvirt (default), or qemu to run QEMU directly
                     without libvirt
   --pool-dir DIR    Where images and disks are kept. Remembered for later
-                    commands. Default: libvirt /var/lib/libvirt/images/agentcage
-                    (/home/agentcage if / is a smaller, separate partition),
-                    qemu ~/.local/share/agentcage
+                    commands. Default: libvirt /var/lib/libvirt/images/acage
+                    (/home/acage if / is a smaller, separate partition),
+                    qemu ~/.local/share/acage
   -y, --yes         Don't ask for confirmations (image key fingerprint,
                     shared-folder warning, delete)
   -n, --dry-run     Print what would change instead of changing it
@@ -255,7 +255,7 @@ prompt_settings() {
   [ "$VCPUS_SET" = 1 ]   || ask VCPUS "vCPUs" "$VCPUS"
   [ "$DISK_SET" = 1 ]    || ask DISK_GB "Disk size in GB" "$DISK_GB"
   [ "$POOL_SET" = 1 ]    || ask POOL_DIR "Folder for images and VM disks ($(set -- $(fs_info "$POOL_DIR"); echo "$1 GB free on $2"))" "$POOL_DIR"
-  [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_agentcage.pub, created if missing)" "$SSH_PUBKEY"
+  [ "$KEY_SET" = 1 ]     || ask SSH_PUBKEY "SSH public key to authorize (Enter: ~/.ssh/id_acage.pub, created if missing)" "$SSH_PUBKEY"
   [ "$DOAS_SET" = 1 ]    || { if yesno "Give your account '$GUEST_USER' root in the VM (doas)? The agent never gets it" y; then GUEST_DOAS=1; else GUEST_DOAS=0; fi; }
   [ "$LAN_SET" = 1 ]     || { yesno "Let the VM reach your local network and this host? (default: internet only)" n && ALLOW_LAN=1 || true; }
   [ "$AUTOSTART_SET" = 1 ] || [ "$HARNESS" = none ] || { yesno "Log straight into the agent's AI when you attach as the agent? (quit it for a shell)" y && AUTOSTART=1 || true; }
@@ -281,7 +281,7 @@ validate_settings() {
 cmd_image() {
   local cache="${XDG_CACHE_HOME:-$HOME/.cache}"
   mkdir -p "$cache"
-  IMG_TMP=$(mktemp -d "$cache/agentcage-image.XXXXXX")
+  IMG_TMP=$(mktemp -d "$cache/acage-image.XXXXXX")
   trap 'rm -rf "${IMG_TMP:-}"' EXIT
   alpine_image_ensure "$IMAGE_ARCH" >/dev/null
   # Clean up now rather than only on exit: create may end in 'exec ssh',
@@ -537,7 +537,7 @@ cmd_delete() {
 # Every VM name acage knows about, from its saved settings and its SSH config.
 acage_vm_names() {
   { [ -f "$CONFIG_FILE" ] && sed -n 's/^user_\([^=]*\)=.*/\1/p' "$CONFIG_FILE"
-    [ -f "$HOME/.ssh/config" ] && sed -n 's/^# agentcage:begin //p' "$HOME/.ssh/config"
+    [ -f "$HOME/.ssh/config" ] && sed -n 's/^# acage:begin //p' "$HOME/.ssh/config"
     true   # keep the group's status zero for the pipe under set -e
   } 2>/dev/null | sort -u
 }
@@ -566,11 +566,11 @@ uninstall_sweep_backend() {
       valid_vm_name "$vm" && backend_delete "$vm" || true
     done
     [ ! -e "$POOL_DIR" ] || prun rm -rf "$POOL_DIR"
-    [ "$be" != qemu ] || run rm -rf "/tmp/agentcage-$(id -u)" )
+    [ "$be" != qemu ] || run rm -rf "/tmp/acage-$(id -u)" )
 }
 
 cmd_uninstall() {
-  local vms vm key=$HOME/.ssh/id_agentcage other=qemu qvms=""
+  local vms vm key=$HOME/.ssh/id_acage other=qemu qvms=""
   [ "$BACKEND" = qemu ] && other=libvirt
   vms=$(acage_vm_names)
   # The other backend is swept too; for qemu we can list its VMs cheaply.
@@ -594,7 +594,7 @@ cmd_uninstall() {
     purge_vm "$vm"
   done
   prun rm -rf "$POOL_DIR"
-  [ "$BACKEND" != qemu ] || run rm -rf "/tmp/agentcage-$(id -u)"
+  [ "$BACKEND" != qemu ] || run rm -rf "/tmp/acage-$(id -u)"
   # Sweep the other backend's VMs and pool (after the confirmation, so any sudo
   # it needs comes only once the user has agreed).
   uninstall_sweep_backend "$other"

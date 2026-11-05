@@ -20,7 +20,7 @@ trap 'kill "$SUDO_KEEPALIVE" 2>/dev/null || true' EXIT
 case "${1:-}" in -v|--verbose|"") VM=benchvm-lv ;; *) VM=$1 ;; esac   # ignore a stray -v
 DAEMON_RSS_MB=50   # libvirtd + dnsmasq standing cost, from Test 1
 CPU_JS='let x=0;for(let i=0;i<1e9;i++){x+=i};console.log(x)'
-CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/agentcage/images"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/acage/images"
 LOGDIR=$(mktemp -d)   # user-owned, avoids root-owned leftover log files
 
 SSHOPT="-F $HOME/.ssh/config -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new"

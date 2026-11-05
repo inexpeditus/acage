@@ -22,14 +22,14 @@ test_libvirt_default_moves_to_home_when_root_is_small() {
   load_libs libvirt
   fake_fs_split
   pool_pick_default
-  assert_eq "$POOL_DIR" /home/agentcage
+  assert_eq "$POOL_DIR" /home/acage
 }
 
 test_libvirt_default_stays_when_home_is_on_root() {
   load_libs libvirt
   fs_info() { echo "200 /"; }
   pool_pick_default
-  assert_eq "$POOL_DIR" /var/lib/libvirt/images/agentcage
+  assert_eq "$POOL_DIR" /var/lib/libvirt/images/acage
 }
 
 test_saved_pool_wins() {
@@ -44,7 +44,7 @@ test_qemu_default_is_in_home() {
   load_libs qemu
   fake_fs_split
   pool_pick_default
-  assert_eq "$POOL_DIR" "$XDG_DATA_HOME/agentcage"
+  assert_eq "$POOL_DIR" "$XDG_DATA_HOME/acage"
 }
 
 test_pool_remember_saves_once() {

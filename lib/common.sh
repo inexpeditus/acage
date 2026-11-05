@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared helpers. Sourced by agentcage; do not run directly.
+# Shared helpers. Sourced by acage; do not run directly.
 
 # All messages go to stderr, so functions whose stdout is captured stay clean.
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*" >&2; }

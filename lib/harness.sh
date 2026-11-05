@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Agent harnesses that can be installed in the VM. Sourced by agentcage.
+# Agent harnesses that can be installed in the VM. Sourced by acage.
 #
 # HARNESS is a comma-separated list (e.g. "pi,codex"), or "none".
 # Each harness is installed globally with npm during first boot. Packages that
@@ -50,7 +50,7 @@ harness_packages() {
   esac
 }
 
-# Lines for /etc/profile.d/agentcage.sh in the guest.
+# Lines for /etc/profile.d/acage.sh in the guest.
 harness_profile_lines() {
   case "$1" in
     claude-code) echo "export USE_BUILTIN_RIPGREP=0" ;;
@@ -82,7 +82,7 @@ harness_store_key_script() {
     pi)
       printf '%s\n' 'umask 077; mkdir -p "$HOME/.pi/agent"; IFS= read -r k; printf "{\n  \"anthropic\": { \"type\": \"api_key\", \"key\": \"%s\" }\n}\n" "$k" >"$HOME/.pi/agent/auth.json"' ;;
     claude-code)
-      printf '%s\n' 'umask 077; d="$HOME/.config/agentcage"; mkdir -p "$d"; IFS= read -r k; touch "$d/env"; grep -v "^export ANTHROPIC_API_KEY=" "$d/env" >"$d/env.new" || true; printf "export ANTHROPIC_API_KEY=%s\n" "$k" >>"$d/env.new"; mv "$d/env.new" "$d/env"' ;;
+      printf '%s\n' 'umask 077; d="$HOME/.config/acage"; mkdir -p "$d"; IFS= read -r k; touch "$d/env"; grep -v "^export ANTHROPIC_API_KEY=" "$d/env" >"$d/env.new" || true; printf "export ANTHROPIC_API_KEY=%s\n" "$k" >>"$d/env.new"; mv "$d/env.new" "$d/env"' ;;
     codex)
       printf '%s\n' 'codex login --with-api-key >/dev/null' ;;
   esac

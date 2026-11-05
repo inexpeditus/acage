@@ -115,7 +115,7 @@ listed() { ac list | grep -q "^$VM "; }
 check "list shows the VM" listed
 check "delete" ac delete "$VM" -y
 if listed; then bad "VM is gone"; else ok "VM is gone"; fi
-if grep -q "agentcage:begin $VM" "$HOME/.ssh/config" 2>/dev/null; then bad "SSH config entry removed"; else ok "SSH config entry removed"; fi
+if grep -q "acage:begin $VM" "$HOME/.ssh/config" 2>/dev/null; then bad "SSH config entry removed"; else ok "SSH config entry removed"; fi
 if grep -q "^$VM " "$HOME/.ssh/known_hosts" 2>/dev/null; then bad "host key removed"; else ok "host key removed"; fi
 check "shared folder kept" test -f "$SHARE/from-vm.txt"
 

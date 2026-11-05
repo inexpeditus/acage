@@ -102,14 +102,14 @@ ssh_pwauth: false
 disable_root: true
 $(alpine_image_cloudinit_extra)
 write_files:
-  - path: /etc/profile.d/agentcage.sh
+  - path: /etc/profile.d/acage.sh
     permissions: "0644"
     content: |
       export EDITOR=vim
 EOF
   for h in $(harness_list); do harness_profile_lines "$h" | sed 's/^/      /'; done
   # Per-user settings such as API keys (written later, mode 600).
-  echo '      [ -r "$HOME/.config/agentcage/env" ] && . "$HOME/.config/agentcage/env"'
+  echo '      [ -r "$HOME/.config/acage/env" ] && . "$HOME/.config/acage/env"'
   # Login message for interactive logins. When autostart is on, the agent
   # account also launches its harness here; quit the harness to drop to a shell
   # (and `acage ssh NAME -- sh` gives a plain shell without launching it).
@@ -118,21 +118,21 @@ EOF
   echo '      case $- in *i*)'
   if [ -n "$hcmd" ]; then
     echo '        if [ "$(id -un)" = agent ]; then'
-    echo '          cat /etc/agentcage/motd.agent 2>/dev/null'
+    echo '          cat /etc/acage/motd.agent 2>/dev/null'
     echo "          command -v $hcmd >/dev/null 2>&1 && $hcmd"
-    echo '        else cat /etc/agentcage/motd.user 2>/dev/null; fi ;;'
+    echo '        else cat /etc/acage/motd.user 2>/dev/null; fi ;;'
   else
-    echo '        if [ "$(id -un)" = agent ]; then cat /etc/agentcage/motd.agent; else cat /etc/agentcage/motd.user; fi 2>/dev/null ;;'
+    echo '        if [ "$(id -un)" = agent ]; then cat /etc/acage/motd.agent; else cat /etc/acage/motd.user; fi 2>/dev/null ;;'
   fi
   echo '      esac'
   # The messages themselves (base64, so any text survives YAML), and an empty
   # /etc/motd so Alpine's default greeting doesn't show as well.
   cat <<EOF
-  - path: /etc/agentcage/motd.agent
+  - path: /etc/acage/motd.agent
     permissions: "0644"
     encoding: b64
     content: $(base64 -w0 "$DATA_DIR/motd.agent")
-  - path: /etc/agentcage/motd.user
+  - path: /etc/acage/motd.user
     permissions: "0644"
     encoding: b64
     content: $(base64 -w0 "$DATA_DIR/motd.user")

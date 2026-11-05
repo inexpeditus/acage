@@ -1,19 +1,19 @@
-# Installs agentcage as:
+# Installs acage as:
 #   $(PREFIX)/bin/acage
-#   $(PREFIX)/lib/agentcage/*.sh
-#   $(PREFIX)/share/agentcage/{domain.xml,image-signing.asc}
+#   $(PREFIX)/lib/acage/*.sh
+#   $(PREFIX)/share/acage/{domain.xml,image-signing.asc}
 #   $(PREFIX)/share/man/man1/acage.1
-#   $(PREFIX)/share/doc/agentcage/README.md, $(PREFIX)/share/licenses/agentcage/LICENSE
+#   $(PREFIX)/share/doc/acage/README.md, $(PREFIX)/share/licenses/acage/LICENSE
 # Packagers: make install PREFIX=/usr DESTDIR="$pkgdir"
 
 PREFIX ?= /usr/local
 DESTDIR ?=
 BIN = $(DESTDIR)$(PREFIX)/bin
-LIB = $(DESTDIR)$(PREFIX)/lib/agentcage
-DATA = $(DESTDIR)$(PREFIX)/share/agentcage
-DOC = $(DESTDIR)$(PREFIX)/share/doc/agentcage
+LIB = $(DESTDIR)$(PREFIX)/lib/acage
+DATA = $(DESTDIR)$(PREFIX)/share/acage
+DOC = $(DESTDIR)$(PREFIX)/share/doc/acage
 MAN1 = $(DESTDIR)$(PREFIX)/share/man/man1
-LICENSES = $(DESTDIR)$(PREFIX)/share/licenses/agentcage
+LICENSES = $(DESTDIR)$(PREFIX)/share/licenses/acage
 BASHCOMP = $(DESTDIR)$(PREFIX)/share/bash-completion/completions
 ZSHCOMP = $(DESTDIR)$(PREFIX)/share/zsh/site-functions
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Post-boot automation: wait for key login and first-boot setup (cloud-init),
 # add an SSH config entry, then (interactively) store API keys, offer a
-# deploy key and connect. Sourced by agentcage.
+# deploy key and connect. Sourced by acage.
 #
 # The backend sets SSH_HOST and SSH_PORT before any of this runs.
 
@@ -50,11 +50,11 @@ ssh_probe() {
   (IFS=$'\n'; exec ssh $opts -o BatchMode=no "${user}@${vm}" "$@")
 }
 
-# The block agentcage manages in ~/.ssh/config is fenced by these markers.
-ssh_marker_begin() { echo "# agentcage:begin $1"; }
-ssh_marker_end()   { echo "# agentcage:end $1"; }
+# The block acage manages in ~/.ssh/config is fenced by these markers.
+ssh_marker_begin() { echo "# acage:begin $1"; }
+ssh_marker_end()   { echo "# acage:end $1"; }
 
-# remove_ssh_config_entry VM -> deletes agentcage's block for VM, if any.
+# remove_ssh_config_entry VM -> deletes acage's block for VM, if any.
 remove_ssh_config_entry() {
   local vm=$1 cfg="$HOME/.ssh/config" tmp
   [ -f "$cfg" ] && grep -qxF "$(ssh_marker_begin "$vm")" "$cfg" || return 0
@@ -256,7 +256,7 @@ provision_vm() {
 
   if yesno "Generate a GitHub deploy key for the $AGENT_USER account?" y; then
     echo "Add this key on GitHub (repo -> Settings -> Deploy keys; read-only unless the agent must push):" >&2
-    vm_ssh "$vm" "$AGENT_USER" 'mkdir -p ~/.ssh; chmod 700 ~/.ssh; [ -f ~/.ssh/id_agent ] || ssh-keygen -q -t ed25519 -f ~/.ssh/id_agent -C agentcage -N ""; grep -q "^Host github.com$" ~/.ssh/config 2>/dev/null || printf "Host github.com\n    IdentityFile ~/.ssh/id_agent\n    IdentitiesOnly yes\n" >>~/.ssh/config; chmod 600 ~/.ssh/config; cat ~/.ssh/id_agent.pub'
+    vm_ssh "$vm" "$AGENT_USER" 'mkdir -p ~/.ssh; chmod 700 ~/.ssh; [ -f ~/.ssh/id_agent ] || ssh-keygen -q -t ed25519 -f ~/.ssh/id_agent -C acage -N ""; grep -q "^Host github.com$" ~/.ssh/config 2>/dev/null || printf "Host github.com\n    IdentityFile ~/.ssh/id_agent\n    IdentitiesOnly yes\n" >>~/.ssh/config; chmod 600 ~/.ssh/config; cat ~/.ssh/id_agent.pub'
   fi
 
   if yesno "Connect now?" y; then

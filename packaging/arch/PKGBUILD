@@ -28,5 +28,5 @@ package() {
   cd "$pkgname-$pkgver"
   make install PREFIX=/usr DESTDIR="$pkgdir"
   # Arch keeps licenses under the package's name.
-  mv "$pkgdir/usr/share/licenses/agentcage" "$pkgdir/usr/share/licenses/$pkgname"
+  mv "$pkgdir/usr/share/licenses/acage" "$pkgdir/usr/share/licenses/$pkgname"
 }

@@ -40,5 +40,5 @@ test_image_dry_run_downloads_nothing() {
   acage_run image -n --backend qemu --pool-dir "$POOL"
   assert_rc 0
   assert_out "would reuse it from"
-  [ ! -e "$XDG_CACHE_HOME/agentcage/images" ] || fail "dry run created the cache"
+  [ ! -e "$XDG_CACHE_HOME/acage/images" ] || fail "dry run created the cache"
 }

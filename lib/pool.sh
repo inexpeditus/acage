@@ -2,10 +2,10 @@
 # Where images and VM disks are kept (the "pool"), free-space checks, and the
 # small config file that remembers the choice. Sourced by acage.
 
-CONFIG_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/agentcage/config
+CONFIG_FILE=${XDG_CONFIG_HOME:-$HOME/.config}/acage/config
 # Verified Alpine images are cached here, under their own versioned file name,
 # so they are downloaded once and shared by every VM and pool directory.
-IMAGE_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/agentcage/images
+IMAGE_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/acage/images
 
 # config_get KEY -> value from the config file, or nothing.
 config_get() {
@@ -41,8 +41,8 @@ fs_info() {
 
 # pool_pick_default -> sets POOL_DIR when neither --pool-dir nor the config
 # file chose one. With libvirt, a root filesystem that is separate from (and
-# smaller than) /home gets /home/agentcage instead of the usual
-# /var/lib/libvirt/images/agentcage, so VM disks don't fill up /.
+# smaller than) /home gets /home/acage instead of the usual
+# /var/lib/libvirt/images/acage, so VM disks don't fill up /.
 pool_pick_default() {
   local saved free mnt hfree hmnt
   saved=$(config_get "pool_dir_$BACKEND")
@@ -52,7 +52,7 @@ pool_pick_default() {
   read -r free mnt <<<"$(fs_info "$POOL_DIR")"
   read -r hfree hmnt <<<"$(fs_info /home)"
   if [ "$mnt" = / ] && [ "$hmnt" != / ] && [ "$hfree" -gt "$free" ]; then
-    POOL_DIR=/home/agentcage
+    POOL_DIR=/home/acage
   fi
 }
 
@@ -68,7 +68,7 @@ pool_validate() {
     home=$(cd "$HOME" && pwd -P)
     case "$POOL_DIR/" in
       "$home"/*|"$HOME"/*)
-        die "With libvirt, VMs run as a separate system user that can't enter your home folder. Pick a folder outside it, e.g. --pool-dir /home/agentcage" ;;
+        die "With libvirt, VMs run as a separate system user that can't enter your home folder. Pick a folder outside it, e.g. --pool-dir /home/acage" ;;
     esac
     case "$POOL_DIR/" in
       /var/lib/libvirt/images/*) ;;
