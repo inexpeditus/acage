@@ -47,7 +47,7 @@ virsh_() {
   local sudo=""
   [ "$(lv_virsh_prefix)" = sudo ] && sudo=sudo
   case "$1" in
-    dominfo|domstate|domblklist|domifaddr|dumpxml|desc|pool-info|pool-list|list|domstats)
+    dominfo|domstate|domblklist|domifaddr|dumpxml|net-dumpxml|desc|pool-info|pool-list|list|domstats)
       if dry; then
         command -v virsh >/dev/null && ${sudo:+sudo -n} virsh -c "$URI" "$@" 2>/dev/null
       else
@@ -67,6 +67,18 @@ pool_exists() { sudo test -e "$1"; }
 
 lv_disk() { echo "$POOL_DIR/$1.qcow2"; }
 lv_seed() { echo "$POOL_DIR/$1-seed.iso"; }
+
+# The 'default' network's dnsmasq answers DNS on the network's own address.
+# Falls back to libvirt's stock address when the network can't be read.
+backend_dns_server() {
+  local ip
+  ip=$(virsh_ net-dumpxml default 2>/dev/null | sed -n "s/.*<ip [^>]*address=['\"]\([0-9.]*\)['\"].*/\1/p" | head -1)
+  if [ -z "$ip" ]; then
+    ip=192.168.122.1
+    warn "Couldn't read libvirt's 'default' network; assuming its DNS is at $ip"
+  fi
+  echo "$ip"
+}
 
 backend_exists() { virsh_ dominfo "$1" >/dev/null 2>&1; }
 backend_running() { [ "$(virsh_ domstate "$1" 2>/dev/null | head -1)" = running ]; }

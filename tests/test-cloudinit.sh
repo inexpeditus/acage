@@ -105,11 +105,39 @@ test_userdata_firewall() {
   assert_out "rc-update add nftables default"
   local b64
   b64=$(printf '%s\n' "$OUT" | awk '/path: \/etc\/nftables.nft/ {f=1} f && /content:/ {print $2; exit}')
-  printf '%s' "$b64" | base64 -d | cmp -s - "$ROOT/share/firewall.nft" || fail "firewall content differs from share/firewall.nft"
+  local fw
+  fw=$(printf '%s' "$b64" | base64 -d)
+  [ "$fw" = "$(sed "s/@DNS_SERVER@/$(backend_dns_server 2>/dev/null)/g" "$ROOT/share/firewall.nft")" ] \
+    || fail "firewall content differs from share/firewall.nft"
+  case "$fw" in *@DNS_SERVER@*) fail "DNS placeholder left in the firewall" ;; esac
   yaml_check '"nftables" in d["packages"]'
   ALLOW_LAN=1
   OUT=$(cloudinit_userdata "$KEY")
   assert_not_out "nftables"
+}
+
+# fw_rules BACKEND -> the decoded firewall from the seed, on that backend.
+fw_rules() {
+  load_libs "$1"
+  cloudinit_userdata "$KEY" 2>/dev/null \
+    | awk '/path: \/etc\/nftables.nft/ {f=1} f && /content:/ {print $2; exit}' | base64 -d
+}
+
+test_firewall_dns_only_to_resolver() {
+  local fw
+  fw=$(fw_rules qemu)
+  case "$fw" in *"ip daddr 10.0.2.3 meta l4proto { tcp, udp } th dport 53 accept"*) ;; *) fail "qemu: DNS not pinned to 10.0.2.3" ;; esac
+  # No rule may accept port 53 without a destination.
+  ! printf '%s\n' "$fw" | grep -E '^\s*meta l4proto .*dport 53 accept' >/dev/null || fail "unrestricted DNS rule"
+  # libvirt reads the address of its 'default' network...
+  stub virsh 'case "$3" in net-dumpxml) echo "  <ip address='"'"'10.9.8.1'"'"' netmask='"'"'255.255.255.0'"'"'>" ;; esac; exit 0'
+  fw=$(fw_rules libvirt)
+  case "$fw" in *"ip daddr 10.9.8.1 "*"dport 53 accept"*) ;; *) fail "libvirt: DNS not pinned to the network address" ;; esac
+  # ...and falls back to the stock address when it can't.
+  stub virsh 'exit 1'
+  unset LV_SUDO
+  fw=$(fw_rules libvirt)
+  case "$fw" in *"ip daddr 192.168.122.1 "*"dport 53 accept"*) ;; *) fail "libvirt: no fallback DNS address" ;; esac
 }
 
 test_userdata_login_messages() {

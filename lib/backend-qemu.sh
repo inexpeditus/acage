@@ -27,6 +27,9 @@ backend_check_deps() {
   qemu_firmware
 }
 
+# QEMU's user networking always serves DNS at this address.
+backend_dns_server() { echo 10.0.2.3; }
+
 pool_ensure() { run mkdir -p "$POOL_DIR/vms"; run chmod 700 "$POOL_DIR"; }
 pool_exists() { [ -e "$1" ]; }
 

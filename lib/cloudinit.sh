@@ -38,6 +38,15 @@ cloudinit_has_package() {
   cloudinit_packages | grep -qxF -- "$1"
 }
 
+# cloudinit_firewall -> share/firewall.nft with the backend's DNS resolver
+# filled in, so the VM can send DNS to that one address and nowhere else.
+cloudinit_firewall() {
+  local dns
+  dns=$(backend_dns_server)
+  [[ "$dns" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]] || die "Unexpected DNS server address '$dns'"
+  sed "s/@DNS_SERVER@/$dns/g" "$DATA_DIR/firewall.nft"
+}
+
 # Validate everything that ends up inside the generated YAML.
 cloudinit_validate() {
   [ -n "$GUEST_USER" ] || die "--user is required (the account to create in the VM)"
@@ -183,7 +192,7 @@ EOF
     permissions: "0644"
     encoding: b64
     defer: true
-    content: $(base64 -w0 "$DATA_DIR/firewall.nft")
+    content: $(cloudinit_firewall | base64 -w0)
 EOF
   fi
   # In golden mode the packages are already baked in; skip installing them.

@@ -3,8 +3,10 @@
 #
 # Lets the VM reach the internet but not your local network or the host:
 # connections to private, link-local and multicast addresses are refused.
-# Exceptions: DNS and DHCP (needed to work at all), replies to connections
-# made into the VM (your SSH sessions), and the loopback interface.
+# Exceptions: DNS to the VM's own resolver and DHCP (needed to work at all),
+# replies to connections made into the VM (your SSH sessions), and the
+# loopback interface. @DNS_SERVER@ is filled in by acage when it writes the
+# VM's first-boot config.
 #
 # Only root in the VM can change this, and the agent account has no root.
 # Create the VM with --allow-lan to leave this file out.
@@ -48,7 +50,10 @@ table inet acage {
 		# before this firewall started (conntrack doesn't know those). Only
 		# root can use port 22, and the agent has no root.
 		tcp sport 22 accept
-		meta l4proto { tcp, udp } th dport 53 accept   # DNS
+		# DNS only to the resolver the backend provides. Port 53 to any other
+		# address falls through to the rules below, so LAN hosts can't be
+		# reached by posing as DNS.
+		ip daddr @DNS_SERVER@ meta l4proto { tcp, udp } th dport 53 accept
 		udp sport 68 udp dport 67 accept               # DHCP
 		meta l4proto ipv6-icmp accept                  # IPv6 neighbour discovery
 		ip daddr @local4 reject with icmpx admin-prohibited

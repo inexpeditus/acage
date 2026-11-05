@@ -77,6 +77,9 @@ change behaviour.
 
 - `acage` refuses to run as root, which would otherwise place your SSH key,
   settings and the VM login in root's home and undo the isolation.
+- The in-VM firewall only allows DNS to the VM's own resolver. It used to
+  allow port 53 to any address, so the agent could reach your router or other
+  LAN hosts by posing as DNS.
 
 ### Fixed
 

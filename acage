@@ -216,6 +216,7 @@ done
 #   backend_locate VM     set SSH_HOST/SSH_PORT for a running VM
 #   backend_start VM, backend_stop VM, backend_delete VM
 #   backend_list, backend_console VM
+#   backend_dns_server    the resolver address the VM is given (firewall pin)
 # Baking always uses the qemu backend: it needs no sudo and produces a plain
 # qcow2 that either backend can then base cages on.
 [ "$cmd" != bake ] || BACKEND=qemu
