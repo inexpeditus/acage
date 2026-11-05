@@ -14,8 +14,8 @@ _acage() {
     cword=$COMP_CWORD
   fi
 
-  local commands="image create quick bake attach tmux push ssh start stop console list delete uninstall help"
-  local name_cmds=" attach tmux push ssh start stop console delete "
+  local commands="image create quick bake attach tmux push ssh start stop console list delete uninstall pull preview status help"
+  local name_cmds=" attach tmux push ssh start stop console delete pull preview status "
 
   # Values expected right after certain flags.
   case "$prev" in
@@ -37,7 +37,7 @@ _acage() {
   # No subcommand yet: complete commands, or global flags if the word is a dash.
   if [ -z "$cmd" ]; then
     if [[ "$cur" == -* ]]; then
-      COMPREPLY=($(compgen -W "--backend --pool-dir -y --yes -n --dry-run -v --verbose -h --help --version" -- "$cur"))
+      COMPREPLY=($(compgen -W "--backend --pool-dir --no-attach -y --yes -n --dry-run -v --verbose -h --help --version" -- "$cur"))
     else
       COMPREPLY=($(compgen -W "$commands" -- "$cur"))
     fi

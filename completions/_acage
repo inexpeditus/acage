@@ -22,6 +22,9 @@ commands=(
   'list:List VMs'
   'delete:Delete a VM and its disk'
   'uninstall:Remove every VM and all acage data'
+  'pull:Fetch commits from the project cage into branch acage/NAME'
+  'preview:Reopen the dev-server preview of a project cage'
+  'status:Show the project cage, its preview and unpulled commits'
   'help:Show help'
 )
 
@@ -34,6 +37,7 @@ _acage_vms() {
 _arguments -C \
   '(-h --help)'{-h,--help}'[Show help]' \
   '--version[Show the version]' \
+  '--no-attach[Project mode: set up but do not open the agent]' \
   '--backend[Backend to use]:backend:(libvirt qemu)' \
   '--pool-dir[Where images and disks are kept]:dir:_files -/' \
   '(-y --yes)'{-y,--yes}'[Do not ask for confirmations]' \
@@ -47,7 +51,7 @@ case $state in
     _describe -t commands 'acage command' commands ;;
   args)
     case $line[1] in
-      attach|tmux|ssh|start|stop|console|delete)
+      attach|tmux|ssh|start|stop|console|delete|pull|preview|status)
         _acage_vms ;;
       push)
         _arguments \

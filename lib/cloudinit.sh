@@ -226,6 +226,11 @@ runcmd:
   #    strict.
   #  - A default ACL of rwX means everything the agent creates afterwards -- its
   #    actual work -- is yours to read and write.
+  # Alpine's sshd allows no port forwarding. Let YOUR ssh client forward into
+  # the agent account's localhost only (the dev-server preview): local
+  # forwards only, never remote ones, and to nothing beyond the VM itself.
+  - printf '\nMatch User $AGENT_USER\n    AllowTcpForwarding local\n    PermitOpen localhost:* 127.0.0.1:* [::1]:*\n' >>/etc/ssh/sshd_config
+  - rc-service sshd reload
   - chmod 700 /home/$GUEST_USER /home/$AGENT_USER
   - setfacl -m u:$GUEST_USER:rx /home/$AGENT_USER
   - setfacl -d -m u:$GUEST_USER:rwX /home/$AGENT_USER

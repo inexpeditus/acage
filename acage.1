@@ -24,6 +24,14 @@
 .Op Fl -user Ar user
 .Op Fl -vcpus Ar N
 .Nm
+.Op Ar URL
+.Op Fl n
+.Op Fl -backend Ar backend
+.Op Fl -no-attach
+.Nm
+.Cm pull | preview | status
+.Op Ar name
+.Nm
 .Cm image
 .Op Fl ny
 .Nm
@@ -123,6 +131,55 @@ so a repeat launch is quick, and simply re-attaches if a machine named
 (default
 .Ql quick )
 already exists.
+.It No (no command, inside a git repository)
+Project mode, with no questions.
+The first run makes a machine for the project, named after its directory (with
+.Ql -2 ,
+.Ql -3
+and so on if that name is taken), on the qemu backend unless
+.Fl -backend
+is given, with at most half the host's memory, all its cores and a 20 GB disk.
+It copies the committed state of the current branch, history included, into
+.Pa ~/name
+in the
+.Ql agent
+account; uncommitted and untracked files stay on the host.
+It installs npm dependencies, starts the
+.Ql dev
+script of
+.Pa package.json
+in the
+.Xr tmux 1
+session
+.Ql preview ,
+and forwards the port it listens on to the same port (or the next free one) on
+127.0.0.1 on the host, for as long as the session lasts.
+Then it opens the agent's harness in the project directory; Claude Code
+continues its last session there.
+Later runs reuse the machine and only start the dev server and the agent.
+.Fl -no-attach
+sets everything up without opening the agent.
+.It Ar URL
+Clone
+.Ar URL
+into the current directory with the host's own git credentials, then continue
+as project mode does inside it.
+.It Cm pull Op Ar name
+Fetch the commits on the agent's checked-out branch into the branch
+.Ql acage/ Ns Ar name
+of the project on the host, for review; nothing is merged.
+Run in the project, or give the machine's
+.Ar name .
+The fetch checks every object, follows no submodules and takes no tags, and it
+never runs anything from the machine.
+Uncommitted changes in the machine are listed, not pulled.
+.It Cm preview Op Ar name
+Start the project's dev server if it isn't running and forward its port until
+interrupted.
+.It Cm status Op Ar name
+Show the project machine's state, whether its dev server is running, whether
+it has commits that haven't been pulled, and how many files are uncommitted
+in it.
 .It Cm attach Ar name
 Log in to the machine, starting it first if it is stopped, asking whether as
 .Ql agent
@@ -154,7 +211,9 @@ The home directory and credential directories such as
 .Pa ~/.ssh
 are refused, and files that look like secrets prompt for confirmation
 .Pf ( Fl -yes No to skip the prompt).
-There is no command to copy files out of a machine.
+There is no command to copy files out of a machine; for a project machine,
+.Cm pull
+fetches the agent's commits.
 .It Cm ssh Ar name Op Fl - Ar command ...
 Log in as
 .Ql agent ,

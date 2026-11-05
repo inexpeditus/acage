@@ -23,7 +23,7 @@ else
   LIB_DIR=$DIR/../lib/acage; DATA_DIR=$DIR/../share/acage
 fi
 
-for f in common pool alpine harness share cloudinit image provision push; do
+for f in common pool alpine harness share cloudinit image provision push project; do
   # shellcheck source=/dev/null
   . "$LIB_DIR/$f.sh"
 done
@@ -51,6 +51,9 @@ DRY_RUN=${DRY_RUN:-0}
 VERBOSE=${VERBOSE:-0}
 ASSUME_YES=0
 NO_WAIT=0
+NO_ATTACH=0
+PROJECT_URL=""
+PROJECT_ROOT=""
 GOLDEN=0
 BACKEND=${ACAGE_BACKEND:-libvirt}; BACKEND_SET=0
 NAME_SET=0; USER_SET=0; RAM_SET=0; VCPUS_SET=0; DISK_SET=0; KEY_SET=0; DOAS_SET=0; POOL_SET=0
@@ -62,6 +65,19 @@ PUSH_TO=.
 usage() {
   cat <<EOF
 Usage: acage <command> [name] [options]
+       acage [URL] [options]      (project mode, below)
+
+Project mode (one cage per git project, qemu backend unless --backend):
+  acage            In a git repository: make or reuse this project's cage,
+                   copy the committed code in (uncommitted files stay here),
+                   install its npm dependencies, start its dev server with a
+                   preview on localhost, and open the agent in the project.
+  acage URL        Clone URL here with your own git credentials, then the same.
+  pull [NAME]      Fetch the agent's commits into branch acage/NAME, for you to
+                   review, merge and push yourself.
+  preview [NAME]   Open the preview again (until Ctrl-C).
+  status [NAME]    The cage's state, its dev server and any unpulled commits.
+  --no-attach      Set everything up, but don't open the agent.
 
 Commands:
   image            Download and verify the latest Alpine cloud image only
@@ -183,6 +199,7 @@ while [ $# -gt 0 ]; do
     --autostart) AUTOSTART=1; AUTOSTART_SET=1; shift ;;
     --no-autostart) AUTOSTART=0; AUTOSTART_SET=1; shift ;;
     --no-wait) NO_WAIT=1; shift ;;
+    --no-attach) NO_ATTACH=1; shift ;;
     -n|--dry-run) DRY_RUN=1; shift ;;
     -v|--verbose) VERBOSE=1; shift ;;
     -y|--yes) ASSUME_YES=1; shift ;;
@@ -199,7 +216,13 @@ while [ $# -gt 0 ]; do
       shift ;;
   esac
 done
-[ -n "$cmd" ] || { usage; exit 1; }
+# No command inside a git repository, or a repository URL: project mode.
+if [ -z "$cmd" ]; then
+  command -v git >/dev/null && git rev-parse --show-toplevel >/dev/null 2>&1 || { usage; exit 1; }
+  cmd=project
+elif is_repo_url "$cmd"; then
+  PROJECT_URL=$cmd; cmd=project
+fi
 [ "$(uname -s)" = Linux ] || die "acage needs a Linux host with KVM"
 # Running as root would put your SSH key, settings and the VM login in root's
 # home and undo the isolation acage is for. The libvirt backend elevates with
@@ -217,12 +240,31 @@ done
 #   backend_start VM, backend_stop VM, backend_delete VM
 #   backend_list, backend_console VM
 #   backend_dns_server    the resolver address the VM is given (firewall pin)
+# A valid hostname label that YAML won't read as a number or boolean.
+valid_vm_name() { [[ "$1" =~ ^[a-z][a-z0-9-]{0,62}$ ]] && [[ "$1" != *- ]]; }
+check_name() {
+  valid_vm_name "$VM" \
+    || die "Invalid VM name '$VM' (lowercase letters, digits and -, starting with a letter)"
+}
+
+# Project commands find their cage from the git repository (cloning first for
+# 'acage URL'), so the cage name is known before the backend is picked.
+[ -z "$PROJECT_URL" ] || project_clone
+case "$cmd" in project|pull|preview|status) project_resolve ;; esac
+# A named VM uses the backend it was made on (saved at create), unless
+# --backend says otherwise.
+if [ "$NAME_SET" = 1 ] && [ "$BACKEND_SET" = 0 ] && valid_vm_name "$VM"; then
+  saved_backend=$(config_get "backend_$VM")
+  [ -z "$saved_backend" ] || BACKEND=$saved_backend
+fi
 # Baking always uses the qemu backend: it needs no sudo and produces a plain
 # qcow2 that either backend can then base cages on.
 [ "$cmd" != bake ] || BACKEND=qemu
-# 'quick' is a zero-prompt one-liner, so it defaults to the qemu backend (no
-# sudo); pass --backend to override.
-[ "$cmd" != quick ] || [ "$BACKEND_SET" = 1 ] || BACKEND=qemu
+# 'quick' and new project cages need no questions, so they default to the
+# qemu backend (no sudo); pass --backend to override.
+case "$cmd" in
+  quick|project) [ "$BACKEND_SET" = 1 ] || [ -n "${saved_backend:-}" ] || BACKEND=qemu ;;
+esac
 case "$BACKEND" in
   libvirt|qemu) ;;
   *) die "Unknown backend '$BACKEND' (libvirt or qemu)" ;;
@@ -232,13 +274,10 @@ esac
 backend_init
 [ "$POOL_SET" = 1 ] || pool_pick_default
 pool_validate
-
-# A valid hostname label that YAML won't read as a number or boolean.
-valid_vm_name() { [[ "$1" =~ ^[a-z][a-z0-9-]{0,62}$ ]] && [[ "$1" != *- ]]; }
-check_name() {
-  valid_vm_name "$VM" \
-    || die "Invalid VM name '$VM' (lowercase letters, digits and -, starting with a letter)"
-}
+case "$cmd" in
+  pull|preview|status)
+    backend_exists "$VM" || die "The cage '$VM' no longer exists; run 'acage' in the project to make a new one" ;;
+esac
 
 # Ask about anything create needs that wasn't given on the command line.
 # Skipped when not running in a terminal (piped input, scripts, CI).
@@ -383,9 +422,11 @@ cmd_create() {
   fi
 
   backend_create "$VM"
-  # Remembered so 'acage attach' knows your account and 'acage delete' the share.
+  # Remembered so 'acage attach' knows your account and 'acage delete' the
+  # share, and so later commands find the VM on the backend it was made on.
   if ! dry; then
     config_set "user_$VM" "$GUEST_USER"
+    config_set "backend_$VM" "$BACKEND"
     [ -z "$SHARE_DIR" ] || config_set "share_$VM" "$SHARE_DIR"
     [ "$SHARE_CREATED" != 1 ] || config_set "share_created_$VM" 1
   fi
@@ -501,9 +542,10 @@ purge_vm() {
   if ! dry; then
     remove_ssh_config_entry "$vm"
     [ -f "$HOME/.ssh/known_hosts" ] && ssh-keygen -R "$vm" -f "$HOME/.ssh/known_hosts" >/dev/null 2>&1 || true
-    config_unset "user_$vm"
-    config_unset "share_$vm"
-    config_unset "share_created_$vm"
+    local k
+    for k in user share share_created backend project project_copied project_setup preview_port; do
+      config_unset "${k}_$vm"
+    done
   fi
   log "Deleted $vm"
   [ -z "$share" ] || share_offer_delete "$share" "$created"
@@ -512,11 +554,12 @@ purge_vm() {
 # Deletes a VM and everything acage set up for it on this computer. Also
 # cleans up after a create that failed half-way, when only settings are left.
 cmd_delete() {
-  local exists=1 share
+  local exists=1 share project
   backend_exists "$VM" || exists=0
   share=$(config_get "share_$VM")
+  project=$(config_get "project_$VM")
   if [ "$exists" = 0 ] && ! grep -qxF "$(ssh_marker_begin "$VM")" "$HOME/.ssh/config" 2>/dev/null \
-       && [ -z "$(config_get "user_$VM")$share" ]; then
+       && [ -z "$(config_get "user_$VM")$share$project" ]; then
     die "No VM named '$VM'"
   fi
   {
@@ -528,19 +571,13 @@ cmd_delete() {
     fi
     echo "  - its 'Host $VM' entry in ~/.ssh/config and its host key in ~/.ssh/known_hosts"
     echo "  - acage's saved settings for it"
+    [ -z "$project" ] || [ "$exists" = 0 ] \
+      || echo "  - the agent's copy of $project: commits you haven't pulled ('acage pull') are lost"
     [ -z "$share" ] || echo "Its shared folder $share is not part of this; you'll be asked about it separately."
     echo "Your SSH key, the downloaded Alpine image and other VMs are kept."
   } >&2
   confirm_destroy "Deleting" "Nothing was deleted"
   purge_vm "$VM"
-}
-
-# Every VM name acage knows about, from its saved settings and its SSH config.
-acage_vm_names() {
-  { [ -f "$CONFIG_FILE" ] && sed -n 's/^user_\([^=]*\)=.*/\1/p' "$CONFIG_FILE"
-    [ -f "$HOME/.ssh/config" ] && sed -n 's/^# acage:begin //p' "$HOME/.ssh/config"
-    true   # keep the group's status zero for the pipe under set -e
-  } 2>/dev/null | sort -u
 }
 
 # Removes everything acage put on this computer: every VM on this backend, the
@@ -679,6 +716,10 @@ case "$cmd" in
     check_space 1 "the Alpine image" "$IMAGE_CACHE"
     cmd_bake ;;
   quick) cmd_quick ;;
+  project) cmd_project ;;
+  pull) cmd_pull ;;
+  preview) cmd_preview ;;
+  status) cmd_status ;;
   attach) need_name; cmd_attach ;;
   tmux) need_name; cmd_tmux ;;
   push) need_name; cmd_push ;;

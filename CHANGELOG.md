@@ -8,6 +8,23 @@ change behaviour.
 
 ### Added
 
+- **Project mode.** `acage` with no command inside a git repository makes (or
+  reuses) one cage for that project, with no questions: it copies the
+  committed code in (uncommitted and untracked files, such as a gitignored
+  `.env`, stay on the host), installs npm dependencies, starts the `dev`
+  script with a live preview forwarded to `localhost`, and opens Claude in the
+  project folder, continuing its last session. `acage URL` clones the
+  repository on the host first. Project cages default to the qemu backend.
+- `acage pull`: fetches the agent's commits into branch `acage/NAME` for
+  review, without merging. The fetch checks every object, follows no
+  submodules and takes no tags. `acage preview` reopens the preview and
+  `acage status` shows the cage, its dev server and any unpulled commits.
+- Commands given a VM name use the backend that VM was created on, so
+  `--backend` is no longer needed after creating a VM on qemu.
+- Every cage allows SSH port forwarding from your computer into its own
+  localhost (for the preview), for the agent account only. Reverse forwards
+  and forwards to other addresses are still refused.
+
 - `-v`/`--verbose`: print each command acage runs, and show cloud-init's
   progress and the tail of its log during first boot instead of waiting
   silently.
