@@ -275,3 +275,13 @@ test_cloudinit_validate() {
   GUEST_USER=agent; assert_fails "is the agent's account" cloudinit_validate
   GUEST_USER=roy; cloudinit_validate
 }
+
+test_userdata_injection_log() {
+  load_libs
+  OUT=$(cloudinit_userdata "$KEY")
+  assert_out "install -d -m 755 /var/log/acage"
+  assert_out "install -o agent -g agent -m 644 /dev/null /var/log/acage/injections.log"
+  assert_out "chattr +a /var/log/acage/injections.log"
+  assert_out "suspected prompt injection(s) logged in /var/log/acage/injections.log"
+  yaml_check 'any(w["path"] == "/etc/profile.d/acage.sh" and "injections.log" in w["content"] for w in d["write_files"])'
+}

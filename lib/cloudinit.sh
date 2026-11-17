@@ -10,6 +10,9 @@
 # no root it can't switch off the firewall.
 
 AGENT_USER=agent
+# The agent's append-only log of suspected prompt injections (in the guest).
+INJECTION_LOG_DIR=/var/log/acage
+INJECTION_LOG=$INJECTION_LOG_DIR/injections.log
 
 # cloudinit_packages -> the apk packages a from-scratch cage installs at first
 # boot (one per line, deduped), after honoring the two package flags:
@@ -124,6 +127,15 @@ EOF
   # (and `acage ssh NAME -- sh` gives a plain shell without launching it).
   local hcmd=""
   if [ "${AUTOSTART:-0}" = 1 ]; then for h in $(harness_list); do hcmd=$(harness_command "$h"); break; done; fi
+  # Suspected prompt injections the agent logged, shown first at every
+  # interactive login. tr drops control characters, so a hostile line can't
+  # send escape sequences to your terminal.
+  cat <<EOF
+      case \$- in *i*) if [ -s $INJECTION_LOG ]; then
+        printf '\n\033[1;33m!\033[0m %s suspected prompt injection(s) logged in $INJECTION_LOG; latest:\n' "\$(wc -l <$INJECTION_LOG)"
+        tail -n 3 $INJECTION_LOG | tr -d '\000-\010\013-\037\177' | cut -c1-200 | sed 's/^/    /'; echo
+      fi ;; esac
+EOF
   echo '      case $- in *i*)'
   if [ -n "$hcmd" ]; then
     echo '        if [ "$(id -un)" = agent ]; then'
@@ -234,6 +246,12 @@ runcmd:
   - chmod 700 /home/$GUEST_USER /home/$AGENT_USER
   - setfacl -m u:$GUEST_USER:rx /home/$AGENT_USER
   - setfacl -d -m u:$GUEST_USER:rwX /home/$AGENT_USER
+  # Where the agent reports suspected prompt injection. Append-only, in a
+  # root-owned folder: the agent can add lines but never erase, rename or
+  # replace the log (in its own home it could rename the folder around it).
+  - install -d -m 755 $INJECTION_LOG_DIR
+  - install -o $AGENT_USER -g $AGENT_USER -m 644 /dev/null $INJECTION_LOG
+  - chattr +a $INJECTION_LOG
 EOF
   # Load the firewall only when nftables will actually be present (a package
   # flag can exclude it); the warning about that is emitted up in cloudinit_userdata.

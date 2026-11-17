@@ -162,3 +162,8 @@ test_ssh_config_leaves_foreign_entries_alone() {
   assert_out "already has its own 'Host box' entry"
   assert_eq "$(cat "$HOME/.ssh/config")" "$(printf 'Host box\n  User mine')"
 }
+
+test_term_safe_drops_escape_sequences() {
+  load_libs
+  assert_eq "$(printf 'a\033[31mb\033]0;t\007\tc' | term_safe)" "$(printf 'a[31mb]0;t\tc')"
+}

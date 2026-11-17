@@ -300,6 +300,30 @@ project_open_agent() {
     "exec sh -lc 'cd ~/$VM && $inner'"
 }
 
+# project_injection_count -> how many suspected prompt injections the agent
+# has logged in the cage (0 if none, or if the cage can't be asked).
+project_injection_count() {
+  local n
+  n=$(vm_ssh "$VM" "$AGENT_USER" "wc -l <$INJECTION_LOG 2>/dev/null || echo 0" 2>/dev/null | tr -d ' ')
+  [[ "$n" =~ ^[0-9]+$ ]] && echo "$n" || echo 0
+}
+
+# project_injection_report [SINCE] -> warns about the logged suspicions, with
+# the latest few lines, when there are more than SINCE (default 0).
+project_injection_report() {
+  local since=${1:-0} n
+  n=$(project_injection_count)
+  [ "$n" -gt "$since" ] || return 0
+  if [ "$since" -gt 0 ]; then
+    warn "The agent logged $((n - since)) new suspected prompt injection(s) ($n in all); latest:"
+  else
+    warn "The agent has logged $n suspected prompt injection(s); latest:"
+  fi
+  vm_ssh "$VM" "$AGENT_USER" "tail -n 5 $INJECTION_LOG" 2>/dev/null \
+    | term_safe | cut -c1-300 | sed 's/^/    /' >&2
+  echo "    The full log: acage ssh $VM -- cat $INJECTION_LOG" >&2
+}
+
 project_ready() {
   ensure_up "$VM"
   backend_locate "$VM"
@@ -307,6 +331,7 @@ project_ready() {
 }
 
 cmd_project() {
+  local seen
   FORWARD_PID=""
   if ! backend_exists "$VM"; then project_create || return 1; fi
   dry && return 0
@@ -327,8 +352,10 @@ cmd_project() {
     log "Ready. Open the agent with 'acage' here, or bring its commits back with 'acage pull'"
     return 0
   fi
+  seen=$(project_injection_count)
   project_open_agent || true
   [ -z "$FORWARD_PID" ] || kill "$FORWARD_PID" 2>/dev/null || true
+  project_injection_report "$seen"
   log "Bring the agent's commits here with: acage pull"
 }
 
@@ -339,6 +366,7 @@ cmd_pull() {
     || die "There's no repository at ~/$VM in the cage"
   [ -z "$dirty" ] || warn "The agent has uncommitted changes in the cage, which aren't pulled:
 $(printf '%s\n' "$dirty" | head -10 | sed 's/^/    /')"
+  project_injection_report
   old=$(git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/heads/acage/$VM") || old=""
   # Hardened for a cage that may be hostile: objects are checked as they
   # arrive, submodules aren't followed (they could point at other URLs) and
@@ -394,4 +422,5 @@ cmd_status() {
   fi
   dirty=$(vm_ssh "$VM" "$AGENT_USER" "git -C ~/$VM status --porcelain 2>/dev/null | wc -l")
   echo "Uncommitted in the cage: ${dirty:-0} file(s)"
+  project_injection_report
 }

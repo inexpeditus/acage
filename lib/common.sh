@@ -7,6 +7,11 @@ warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$*" >&2; exit 1; }
 
 dry() { [ "$DRY_RUN" = 1 ]; }
+
+# term_safe -> stdin without control characters (tabs and newlines kept), for
+# printing text the cage wrote: escape sequences in it could otherwise drive
+# your terminal.
+term_safe() { LC_ALL=C tr -d '\000-\010\013-\037\177'; }
 interactive() { [ -t 0 ]; }
 
 # In dry-run mode state-changing commands are printed, not executed. With
