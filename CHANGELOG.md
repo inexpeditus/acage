@@ -107,6 +107,12 @@ change behaviour.
   at every login, after each project session, and in `acage pull` and
   `acage status`, with control characters stripped so a hostile line can't
   drive your terminal.
+- `acage pull` points out what needs a careful review before merging: changed
+  files that can run code on your computer or in CI (npm scripts, lockfiles,
+  git hooks, editor and AI agent settings, CI workflows, build files), and
+  invisible or text-direction characters in the added lines, which can hide
+  instructions or code. Commit messages and file names from the cage are
+  printed with control characters stripped.
 
 ### Fixed
 

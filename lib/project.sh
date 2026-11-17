@@ -324,6 +324,63 @@ project_injection_report() {
   echo "    The full log: acage ssh $VM -- cat $INJECTION_LOG" >&2
 }
 
+# project_risk_reason PATH -> why a changed file deserves a careful review
+# (it can run code on your computer or in CI once merged), or nothing.
+project_risk_reason() {
+  case "/$1" in
+    */package.json) echo "npm scripts run on install, dev and build" ;;
+    */package-lock.json|*/npm-shrinkwrap.json|*/yarn.lock|*/pnpm-lock.yaml|*/bun.lock|*/bun.lockb)
+      echo "lockfile: says where packages are downloaded from" ;;
+    */.npmrc|*/.yarnrc|*/.yarnrc.yml|*/.pnpmfile.cjs) echo "package manager settings" ;;
+    /.husky/*|/.githooks/*|*/.pre-commit-config.yaml|*/lefthook.yml|*/.lefthook.yml) echo "git hooks" ;;
+    */.envrc|*/.env|*/.env.*) echo "environment, loaded by direnv or the app" ;;
+    /.vscode/*|/.idea/*|/.devcontainer/*|/.zed/*) echo "editor settings: tasks and containers run from these" ;;
+    /.claude/*|*/CLAUDE.md|*/AGENTS.md|*/GEMINI.md|/.mcp.json|/.cursor/*|*/.cursorrules|/.codex/*)
+      echo "AI agent settings or instructions, read by agents on your computer" ;;
+    /.github/*|/.gitlab-ci.yml|/.circleci/*|/.buildkite/*|/.drone.yml|/Jenkinsfile|/azure-pipelines.yml|/bitbucket-pipelines.yml)
+      echo "CI: runs with your CI secrets once pushed" ;;
+    */Makefile|*/GNUmakefile|*.mk|*/justfile|*/Justfile|*/Taskfile.yml|*/Rakefile) echo "build commands" ;;
+    */Dockerfile*|*/docker-compose*.y*ml|*/compose.y*ml) echo "container build or setup" ;;
+    */.gitattributes|/.gitmodules) echo "git filters or submodules" ;;
+    *.config.js|*.config.mjs|*.config.cjs|*.config.ts|*.config.mts|*.config.cts) echo "tool config, runs as code" ;;
+    */setup.py|*/pyproject.toml|*/requirements*.txt|*/Gemfile|*/Cargo.toml|*/build.rs|*/go.mod|*/composer.json)
+      echo "dependencies or build steps" ;;
+  esac
+}
+
+# Invisible and text-direction characters, as UTF-8 bytes (so any grep can
+# match them): soft hyphen, Arabic letter mark, Mongolian vowel separator,
+# zero-width and direction marks, embeddings and isolates, word joiners, BOM,
+# interlinear annotation and the Unicode tag block (which can spell out hidden
+# text a model reads but you don't see).
+INVISIBLE_RE=$'\xc2\xad|\xd8\x9c|\xe1\xa0\x8e|\xe2\x80[\x8b-\x8f]|\xe2\x80[\xaa-\xae]|\xe2\x81[\xa0-\xa4]|\xe2\x81[\xa6-\xaf]|\xef\xbb\xbf|\xef\xbf[\xb9-\xbb]|\xf3\xa0[\x80\x81][\x80-\xbf]'
+
+# project_review_flags REV -> warns about what the commits on REV but not on
+# your branch change that needs a careful look before merging: files that can
+# run code here or in CI, and invisible characters in the added lines.
+project_review_flags() {
+  local rev=$1 f why risky="" hidden
+  while IFS= read -r -d '' f; do
+    why=$(project_risk_reason "$f")
+    [ -z "$why" ] || risky+="    $f  ($why)"$'\n'
+  done < <(git -C "$PROJECT_ROOT" diff -z --name-only --no-renames "HEAD...$rev" 2>/dev/null)
+  if [ -n "$risky" ]; then
+    warn "Review these with extra care; once merged they can run code on your computer or in CI:"
+    printf '%s' "$risky" | term_safe | head -30 >&2
+  fi
+  # Added lines only, as FILE:LINE. textconv and external diff tools are off,
+  # so nothing the cage's .gitattributes names gets run.
+  hidden=$(git -C "$PROJECT_ROOT" diff --no-ext-diff --no-textconv --no-color -U0 "HEAD...$rev" 2>/dev/null \
+    | LC_ALL=C awk '/^\+\+\+ / { f = substr($0, 5); sub(/^"?b\//, "", f); sub(/"$/, "", f); next }
+        /^@@/ { split($3, a, ","); n = substr(a[1], 2) + 0; next }
+        /^\+/ { print f ":" n "\t" substr($0, 2); n++ }' \
+    | LC_ALL=C grep -E "$INVISIBLE_RE" | cut -f1 | sort -u -t: -k1,1 -k2,2n | head -20) || true
+  if [ -n "$hidden" ]; then
+    warn "Invisible or text-direction characters in the new lines; they can hide instructions or code (see them with: git diff HEAD...${rev#refs/heads/} | cat -A):"
+    printf '%s\n' "$hidden" | term_safe | sed 's/^/    /' >&2
+  fi
+}
+
 project_ready() {
   ensure_up "$VM"
   backend_locate "$VM"
@@ -365,7 +422,7 @@ cmd_pull() {
   dirty=$(vm_ssh "$VM" "$AGENT_USER" "git -C ~/$VM status --porcelain") \
     || die "There's no repository at ~/$VM in the cage"
   [ -z "$dirty" ] || warn "The agent has uncommitted changes in the cage, which aren't pulled:
-$(printf '%s\n' "$dirty" | head -10 | sed 's/^/    /')"
+$(printf '%s\n' "$dirty" | head -10 | term_safe | sed 's/^/    /')"
   project_injection_report
   old=$(git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/heads/acage/$VM") || old=""
   # Hardened for a cage that may be hostile: objects are checked as they
@@ -384,7 +441,8 @@ $(printf '%s\n' "$dirty" | head -10 | sed 's/^/    /')"
   fi
   count=$(git -C "$PROJECT_ROOT" rev-list --count "HEAD..refs/heads/acage/$VM")
   log "Pulled into branch acage/$VM: $count commit(s) not on your current branch"
-  git -C "$PROJECT_ROOT" log --oneline "HEAD..refs/heads/acage/$VM" | head -20 >&2
+  git -C "$PROJECT_ROOT" log --oneline "HEAD..refs/heads/acage/$VM" | head -20 | term_safe >&2
+  project_review_flags "refs/heads/acage/$VM"
   {
     echo "Review:  git log -p HEAD..acage/$VM"
     echo "Merge:   git merge acage/$VM   (then push it yourself)"
