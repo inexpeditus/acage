@@ -97,6 +97,10 @@ change behaviour.
 - The in-VM firewall only allows DNS to the VM's own resolver. It used to
   allow port 53 to any address, so the agent could reach your router or other
   LAN hosts by posing as DNS.
+- A project cage's agent instructions cover prompt injection: treat what it
+  reads as data, never send code or keys anywhere, install nothing because a
+  file said so, flag changes to files that run code on your computer or in CI,
+  and report instructions that look planted.
 
 ### Fixed
 
