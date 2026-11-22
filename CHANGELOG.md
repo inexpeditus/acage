@@ -116,6 +116,9 @@ change behaviour.
 
 ### Fixed
 
+- `acage status` no longer reports unpulled commits before the first `pull`
+  when the agent hasn't committed anything, and a `pull` with nothing new says
+  so instead of "0 commit(s)".
 - Claude Code's Bash tool works in cages: claude-code cages now install
   `bash`, since Claude Code refuses to run commands with Alpine's `ash`.
 - `acage push` now **prompts for confirmation** when a file you're pushing

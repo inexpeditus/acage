@@ -440,6 +440,10 @@ $(printf '%s\n' "$dirty" | head -10 | term_safe | sed 's/^/    /')"
     warn "The agent rewrote its history; acage/$VM was replaced (it was ${old:0:12})"
   fi
   count=$(git -C "$PROJECT_ROOT" rev-list --count "HEAD..refs/heads/acage/$VM")
+  if [ "$count" = 0 ]; then
+    log "Nothing new from the agent: acage/$VM has no commits that aren't on your current branch"
+    return 0
+  fi
   log "Pulled into branch acage/$VM: $count commit(s) not on your current branch"
   git -C "$PROJECT_ROOT" log --oneline "HEAD..refs/heads/acage/$VM" | head -20 | term_safe >&2
   project_review_flags "refs/heads/acage/$VM"
@@ -474,8 +478,13 @@ cmd_status() {
   fi
   remote=$(project_git ls-remote "$VM:$VM" HEAD 2>/dev/null | cut -f1)
   here=$(git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/heads/acage/$VM") || here=""
+  # Nothing to pull when the cage's head is already here: on your branch (as
+  # right after the copy-in) or on acage/NAME.
   if [ -z "$remote" ]; then echo "Commits:  the cage has no repository yet"
-  elif [ "$remote" = "$here" ]; then echo "Commits:  everything is pulled"
+  elif git -C "$PROJECT_ROOT" cat-file -e "$remote^{commit}" 2>/dev/null \
+       && { git -C "$PROJECT_ROOT" merge-base --is-ancestor "$remote" HEAD 2>/dev/null \
+            || { [ -n "$here" ] && git -C "$PROJECT_ROOT" merge-base --is-ancestor "$remote" "$here"; }; }; then
+    echo "Commits:  nothing new from the agent"
   else echo "Commits:  the cage has commits you haven't pulled ('acage pull')"
   fi
   dirty=$(vm_ssh "$VM" "$AGENT_USER" "git -C ~/$VM status --porcelain 2>/dev/null | wc -l")
