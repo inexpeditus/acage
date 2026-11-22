@@ -51,6 +51,7 @@ dep_pkg() {
     xorriso)        [ "$2" = apt ] && echo xorriso || echo libisoburn ;;
     virsh)          [ "$2" = apt ] && echo libvirt-daemon-system || echo libvirt ;;
     gpg)            echo gnupg ;;
+    setsid)         echo util-linux ;;
     ssh|ssh-keygen) [ "$2" = apt ] && echo openssh-client || echo openssh ;;
     *)              echo "$1" ;;
   esac

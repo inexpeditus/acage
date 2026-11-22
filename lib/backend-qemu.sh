@@ -21,7 +21,7 @@ backend_init() {
 # Collects every missing tool (via want) and reports them together, then
 # checks the things no package install fixes: KVM access and UEFI firmware.
 backend_check_deps() {
-  want "$QEMU_BIN"; want qemu-img
+  want "$QEMU_BIN"; want qemu-img; want setsid
   report_missing
   [ -r /dev/kvm ] && [ -w /dev/kvm ] || die "No access to /dev/kvm (add yourself to the 'kvm' group and log in again)"
   qemu_firmware
@@ -155,15 +155,44 @@ qemu_launch() {
     -chardev "socket,id=con0,path=$(qesc "$sock/$vm.console"),server=on,wait=off,logfile=$(qesc "$dir/console.log")"
     -serial chardev:con0
     -monitor "unix:$(qesc "$sock/$vm.monitor"),server=on,wait=off"
-    -pidfile "$dir/qemu.pid" -daemonize
+    -pidfile "$dir/qemu.pid"
   )
+  # QEMU runs as you, so a guest that broke out of it would act as you. The
+  # seccomp filter keeps such a QEMU from starting programs, gaining
+  # privileges or using obsolete syscalls. spawn and elevateprivileges also
+  # block QEMU's own -daemonize, so acage puts it in the background instead.
+  if qemu_has_sandbox; then
+    args+=(-sandbox "$QEMU_SANDBOX")
+  else
+    warn "This QEMU has no seccomp support, so $vm runs without QEMU's sandbox"
+  fi
   if [ -n "$C_SHARE_DIR" ]; then
     dry || [ -d "$C_SHARE_DIR" ] || die "Shared folder $C_SHARE_DIR no longer exists"
     # security_model=none: files are created as your user on the host, never as root.
     args+=(-virtfs "local,path=$(qesc "$C_SHARE_DIR"),mount_tag=$SHARE_TAG,security_model=none,id=fs0")
   fi
   log "Starting $vm (SSH on 127.0.0.1:$C_SSH_PORT)"
-  run "$QEMU_BIN" "${args[@]}"
+  if dry; then run "$QEMU_BIN" "${args[@]}"; return 0; fi
+  rm -f "$dir/qemu.pid"
+  [ "${VERBOSE:-0}" != 1 ] || printf '\033[1;36m[run]\033[0m setsid -f %s\n' "$QEMU_BIN ${args[*]}" >&2
+  # setsid -f: a new session, detached from this terminal, as -daemonize did.
+  setsid -f "$QEMU_BIN" "${args[@]}" </dev/null >"$dir/qemu.log" 2>&1
+  # Startup errors (firmware, KVM, a taken port) end QEMU within moments.
+  local n
+  for n in $(seq 1 50); do qemu_pid "$vm" >/dev/null && break; sleep 0.1; done
+  sleep 0.5
+  qemu_pid "$vm" >/dev/null && return 0
+  sed 's/^/    /' "$dir/qemu.log" >&2
+  return 1
+}
+
+# The seccomp policy, and whether this QEMU was built with it (checked once;
+# QEMU validates -sandbox while parsing, before -version exits).
+QEMU_SANDBOX=on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny
+qemu_has_sandbox() {
+  [ -n "${QEMU_SANDBOX_OK:-}" ] \
+    || { "$QEMU_BIN" -sandbox "$QEMU_SANDBOX" -version >/dev/null 2>&1 && QEMU_SANDBOX_OK=1 || QEMU_SANDBOX_OK=0; }
+  [ "$QEMU_SANDBOX_OK" = 1 ]
 }
 
 backend_start() {

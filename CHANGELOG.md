@@ -92,6 +92,11 @@ change behaviour.
 
 ### Security
 
+- The qemu backend runs QEMU under its seccomp sandbox: a QEMU taken over
+  from inside the VM can't start programs, gain privileges or use obsolete
+  syscalls. acage now puts QEMU in the background itself, since QEMU's own
+  `-daemonize` needs exactly what the sandbox blocks. QEMU builds without
+  seccomp still work, with a warning.
 - `acage` refuses to run as root, which would otherwise place your SSH key,
   settings and the VM login in root's home and undo the isolation.
 - The in-VM firewall only allows DNS to the VM's own resolver. It used to

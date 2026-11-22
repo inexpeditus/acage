@@ -28,7 +28,11 @@ Alpine's GPG signature, with the signing key pinned by fingerprint in
 ## What it trusts
 
 - **Your host, KVM, QEMU and libvirt.** A bug that lets code escape a VM
-  ("VM escape") breaks the isolation. Keep the host updated.
+  ("VM escape") breaks the isolation. Keep the host updated. How far an
+  escape reaches depends on the backend: libvirt runs QEMU as its own
+  `qemu` user, while the qemu backend runs it as you, so an escape lands in
+  your account. The qemu backend limits that with QEMU's seccomp sandbox
+  (no starting programs, no gaining privileges), when QEMU is built with it.
 - **Alpine's image signing key.** A compromised Alpine key could sign a
   malicious image.
 - **npm and the agent vendors.** The agent harnesses are installed from npm

@@ -301,7 +301,8 @@ connection.
 .Cm qemu
 runs
 .Xr qemu-system-x86_64 1
-directly as the invoking user, without libvirt.
+directly as the invoking user, without libvirt, under QEMU's seccomp
+sandbox when QEMU supports it.
 .It Fl -disk Ar GB
 Disk size.
 The disk starts small and can grow to this size.
