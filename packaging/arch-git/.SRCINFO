@@ -20,7 +20,10 @@ pkgbase = acage-git
 	optdepends = sudo: the libvirt backend runs virsh through sudo
 	optdepends = openssl: setting a password for your account in the VM (--password)
 	optdepends = openbsd-netcat: clean shutdown with --backend qemu (else the VM is terminated)
-	optdepends = tmux: the two-pane "acage work" session (agent + you side by side)
+	optdepends = tmux: the two-pane "acage tmux" session (agent + you side by side)
+	optdepends = wl-clipboard: acage paste on Wayland
+	optdepends = xclip: acage paste on X11
+	optdepends = libnotify: acage paste reports by notification when run from a keybind
 	provides = acage
 	conflicts = acage
 	source = acage-git::git+https://github.com/inexpeditus/acage.git#branch=main
