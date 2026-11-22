@@ -138,7 +138,8 @@ The first run makes a machine for the project, named after its directory (with
 .Ql -3
 and so on if that name is taken), on the qemu backend unless
 .Fl -backend
-is given, with at most half the host's memory, all its cores and a 20 GB disk.
+is given, with at most a quarter of the host's memory (2 to 8 GB), all its
+cores and a 20 GB disk.
 It copies the committed state of the current branch, history included, into
 .Pa ~/name
 in the

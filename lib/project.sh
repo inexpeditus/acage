@@ -106,11 +106,12 @@ project_resolve() {
   check_name
 }
 
-# Ceilings for a new project's cage: about half the host's RAM (at least
-# 2 GB) and every host core (at most 64). KVM only backs memory the guest
-# touches, so the RAM ceiling isn't reserved up front.
+# Ceilings for a new project's cage: a quarter of the host's RAM (2 to 8 GB)
+# and every host core (at most 64). KVM only backs memory the guest touches,
+# but the guest keeps what it has touched as file cache, so a cage drifts up to
+# its ceiling over time; a quarter keeps a few cages from taking everything.
 project_default_ram() {
-  awk '/^MemTotal:/ { m = int($2 / 2048); print (m < 2048 ? 2048 : m) }' /proc/meminfo
+  awk '/^MemTotal:/ { m = int($2 / 4096); print (m < 2048 ? 2048 : m > 8192 ? 8192 : m) }' /proc/meminfo
 }
 project_default_vcpus() {
   local n
