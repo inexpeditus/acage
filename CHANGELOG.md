@@ -25,6 +25,11 @@ change behaviour.
   localhost (for the preview), for the agent account only. Reverse forwards
   and forwards to other addresses are still refused.
 
+- `acage paste [NAME]`: copies the image on your clipboard into the agent's
+  `~/pastes` and puts its path on the clipboard, so you can hand a screenshot
+  to the agent, which can't read your clipboard from the cage. Made to bind to
+  a key, reporting through a desktop notification when run without a terminal.
+  Needs `wl-clipboard` on Wayland or `xclip` on X11.
 - `-v`/`--verbose`: print each command acage runs, and show cloud-init's
   progress and the tail of its log during first boot instead of waiting
   silently.

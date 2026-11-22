@@ -14,8 +14,8 @@ _acage() {
     cword=$COMP_CWORD
   fi
 
-  local commands="image create quick bake attach tmux push ssh start stop console list delete uninstall pull preview status help"
-  local name_cmds=" attach tmux push ssh start stop console delete pull preview status "
+  local commands="image create quick bake attach tmux push paste ssh start stop console list delete uninstall pull preview status help"
+  local name_cmds=" attach tmux push paste ssh start stop console delete pull preview status "
 
   # Values expected right after certain flags.
   case "$prev" in

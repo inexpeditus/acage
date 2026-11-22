@@ -75,3 +75,31 @@ test_push_command_line() {
   acage_run push box "$TMP" --to x --user --backend qemu --pool-dir "$POOL"
   assert_rc 1; assert_out "'box' is not running"
 }
+
+clipboard_with() {
+  export WAYLAND_DISPLAY=wayland-0
+  stub wl-paste "case \"\$1\" in --list-types) printf '$1' ;; *) printf PNGDATA ;; esac"
+  stub wl-copy "cat >'$TMP/copied'"
+}
+
+test_paste_copies_the_clipboard_image_in() {
+  fake_vm_home
+  clipboard_with 'text/html\nimage/jpeg\nimage/png\n'
+  OUT=$(paste_image box 2>/dev/null)
+  case "$OUT" in /home/agent/pastes/paste-*.png) ;; *) fail "unexpected path: $OUT" ;; esac
+  assert_eq "$(cat "$REMOTE/pastes/${OUT##*/}")" PNGDATA
+  assert_eq "$(cat "$TMP/copied")" "$OUT"
+}
+
+test_paste_refuses_a_clipboard_without_an_image() {
+  fake_vm_home
+  clipboard_with 'text/plain\n'
+  assert_fails "holds no image" paste_image box
+  [ ! -e "$REMOTE/pastes" ] || fail "something was copied anyway"
+}
+
+test_paste_needs_a_graphical_session() {
+  fake_vm_home
+  unset WAYLAND_DISPLAY DISPLAY
+  assert_fails "No graphical session" paste_image box
+}
