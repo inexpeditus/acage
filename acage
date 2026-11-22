@@ -92,6 +92,10 @@ Commands:
   tmux NAME        Open two side-by-side shells in tmux: the agent (left) and
                    you (right). Starts the VM first if stopped. Needs tmux.
   push NAME PATH...  Copy files or folders from here into the agent's home
+  paste [NAME]     Copy the image on your clipboard into the agent's
+                   ~/pastes and put its path on the clipboard, to paste to
+                   the agent (NAME defaults to this project's cage). Bind it
+                   to a key; without a terminal it reports by notification.
   ssh NAME [-- CMD]  Run CMD in a VM (as the agent unless --user)
   start NAME       Start a stopped VM
   stop NAME        Shut a VM down
@@ -251,6 +255,8 @@ check_name() {
 # 'acage URL'), so the cage name is known before the backend is picked.
 [ -z "$PROJECT_URL" ] || project_clone
 case "$cmd" in project|pull|preview|status) project_resolve ;; esac
+# paste works on any cage, so only a missing name is looked up from the project.
+[ "$cmd" != paste ] || [ "$NAME_SET" = 1 ] || ! git rev-parse --git-dir >/dev/null 2>&1 || project_resolve
 # A named VM uses the backend it was made on (saved at create), unless
 # --backend says otherwise.
 if [ "$NAME_SET" = 1 ] && [ "$BACKEND_SET" = 0 ] && valid_vm_name "$VM"; then
@@ -467,6 +473,20 @@ cmd_push() {
   sync_ssh_config_host "$VM"
   [ "$WHO" != user ] || user=$(vm_user "$VM")
   push_paths "$VM" "$user" "$PUSH_TO" "${PUSH_PATHS[@]}"
+}
+
+# cmd_paste -> paste_image into VM. Run from a keybind there's no terminal to
+# show the result, so it is also sent as a desktop notification when it can be.
+cmd_paste() {
+  local path
+  if [ ! -t 2 ] && command -v notify-send >/dev/null; then
+    trap '[ $? = 0 ] || notify-send acage "Pasting into $VM failed; run acage paste $VM in a terminal to see why"' EXIT
+  fi
+  backend_running "$VM" || die "$VM isn't running"
+  backend_locate "$VM"
+  path=$(paste_image "$VM")
+  [ -t 2 ] || ! command -v notify-send >/dev/null || dry || notify-send acage "Pasted into $VM: $path"
+  [ -z "$path" ] || printf '%s\n' "$path"
 }
 
 # ensure_up VM -> start the VM if it's stopped and wait until sshd accepts the key.
@@ -723,6 +743,7 @@ case "$cmd" in
   attach) need_name; cmd_attach ;;
   tmux) need_name; cmd_tmux ;;
   push) need_name; cmd_push ;;
+  paste) need_name; cmd_paste ;;
   ssh) need_name; cmd_ssh ;;
   start) need_name; backend_start "$VM" ;;
   stop) need_name; backend_stop "$VM" ;;

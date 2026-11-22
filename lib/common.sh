@@ -52,6 +52,7 @@ dep_pkg() {
     virsh)          [ "$2" = apt ] && echo libvirt-daemon-system || echo libvirt ;;
     gpg)            echo gnupg ;;
     setsid)         echo util-linux ;;
+    wl-paste|wl-copy) echo wl-clipboard ;;
     ssh|ssh-keygen) [ "$2" = apt ] && echo openssh-client || echo openssh ;;
     *)              echo "$1" ;;
   esac

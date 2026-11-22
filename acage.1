@@ -42,6 +42,9 @@
 .Cm tmux
 .Ar name
 .Nm
+.Cm paste
+.Op Ar name
+.Nm
 .Cm push
 .Ar name
 .Ar path ...
@@ -197,6 +200,25 @@ the
 account on the left and the invoking user's account on the right, each over its
 own SSH connection into the machine.
 Starts the machine first if it is stopped.
+.It Cm paste Op Ar name
+Copy the image on the host's clipboard into
+.Pa ~/pastes
+in the home directory of
+.Ql agent ,
+and put the copied file's path on the clipboard to paste to the agent.
+An agent's own image paste reads the clipboard inside the machine, which is
+empty.
+Reads the clipboard with
+.Xr wl-paste 1
+on Wayland or
+.Xr xclip 1
+on X11; takes PNG, JPEG, WebP or GIF.
+Inside a project's repository
+.Ar name
+defaults to the project's machine.
+Meant to be bound to a key: without a terminal, the result is shown with
+.Xr notify-send 1
+when it is installed.
 .It Cm push Ar name Ar path ...
 Copy files and directories from the host into the home directory of
 .Ql agent ,

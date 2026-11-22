@@ -15,6 +15,7 @@ commands=(
   'attach:Log in to a VM (starting it first if stopped)'
   'tmux:Open two side-by-side shells (agent + you) in tmux'
   'push:Copy files or folders into the agent home'
+  'paste:Copy the clipboard image into the agent home'
   'ssh:Run a command in a VM'
   'start:Start a stopped VM'
   'stop:Shut a VM down'
@@ -51,7 +52,7 @@ case $state in
     _describe -t commands 'acage command' commands ;;
   args)
     case $line[1] in
-      attach|tmux|ssh|start|stop|console|delete|pull|preview|status)
+      attach|tmux|ssh|start|stop|console|delete|pull|preview|status|paste)
         _acage_vms ;;
       push)
         _arguments \

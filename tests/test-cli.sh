@@ -64,6 +64,9 @@ test_commands_that_need_a_name() {
   for c in ssh start stop console delete; do
     acage_run "$c"; assert_rc 1; assert_out "Which VM? acage $c NAME"
   done
+  # paste only falls back to the project's cage inside a git repository.
+  cd "$TMP"
+  acage_run paste; assert_rc 1; assert_out "Which VM? acage paste NAME"
 }
 
 test_dry_run_libvirt_changes_nothing() {
