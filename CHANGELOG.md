@@ -126,6 +126,8 @@ change behaviour.
 
 ### Fixed
 
+- On an ARM host, the install hint for missing tools names the ARM packages
+  (`qemu-system-arm`, `qemu-efi-aarch64`) instead of the x86 ones.
 - `acage status` no longer reports unpulled commits before the first `pull`
   when the agent hasn't committed anything, and a `pull` with nothing new says
   so instead of "0 commit(s)".

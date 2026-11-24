@@ -43,6 +43,8 @@ test_dep_pkg_maps_packages_per_distro() {
   load_libs
   assert_eq "$(dep_pkg qemu-img apt)" qemu-utils
   assert_eq "$(dep_pkg qemu-img pacman)" qemu-img
+  assert_eq "$(dep_pkg qemu-system-x86_64 apt)" qemu-system-x86
+  assert_eq "$(dep_pkg qemu-system-aarch64 apt)" qemu-system-arm
   assert_eq "$(dep_pkg xorriso apt)" xorriso
   assert_eq "$(dep_pkg xorriso pacman)" libisoburn
   assert_eq "$(dep_pkg virsh apt)" libvirt-daemon-system

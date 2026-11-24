@@ -68,6 +68,9 @@ qemu_firmware() {
     if [ -f "$code" ] && [ -f "$vars" ]; then FW_CODE=$code; FW_VARS=$vars; return 0; fi
   done <<<"$pairs"
   dry && { FW_CODE="<uefi-code.fd>"; FW_VARS="<uefi-vars.fd>"; return 0; }
+  if [ "$IMAGE_ARCH" = aarch64 ]; then
+    die "No UEFI firmware for aarch64 found (Debian: apt install qemu-efi-aarch64; Arch: pacman -S edk2-aarch64)"
+  fi
   die "No UEFI firmware for $IMAGE_ARCH found (Debian: apt install ovmf; Arch: pacman -S edk2-ovmf)"
 }
 

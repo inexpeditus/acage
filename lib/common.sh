@@ -47,6 +47,7 @@ want() {
 dep_pkg() {
   case "$1" in
     qemu-img)       [ "$2" = apt ] && echo qemu-utils || echo qemu-img ;;
+    qemu-system-aarch64) [ "$2" = apt ] && echo qemu-system-arm || echo qemu-system-aarch64 ;;
     qemu-system-*)  [ "$2" = apt ] && echo qemu-system-x86 || echo qemu-base ;;
     xorriso)        [ "$2" = apt ] && echo xorriso || echo libisoburn ;;
     virsh)          [ "$2" = apt ] && echo libvirt-daemon-system || echo libvirt ;;
