@@ -22,3 +22,9 @@ jobs:
         run: make check
       - name: Test
         run: make test
+      - name: Debian package
+        run: |
+          packaging/deb/build.sh amd64 "$RUNNER_TEMP"
+          packaging/deb/build.sh arm64 "$RUNNER_TEMP"
+          dpkg-deb --info "$RUNNER_TEMP"/acage_*_arm64.deb
+          sudo apt-get install -y -q --simulate "$RUNNER_TEMP"/acage_*_amd64.deb

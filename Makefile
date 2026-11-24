@@ -5,6 +5,8 @@
 #   $(PREFIX)/share/man/man1/acage.1
 #   $(PREFIX)/share/doc/acage/README.md, $(PREFIX)/share/licenses/acage/LICENSE
 # Packagers: make install PREFIX=/usr DESTDIR="$pkgdir"
+# Debian/Ubuntu: make deb, then sudo apt install ./acage_*.deb (pulls in the
+# host tools; DEB_ARCH=amd64 or arm64 to build for another architecture).
 
 PREFIX ?= /usr/local
 DESTDIR ?=
@@ -22,7 +24,7 @@ LIBS = lib/common.sh lib/pool.sh lib/alpine.sh lib/harness.sh lib/share.sh lib/c
 DATAFILES = share/domain.xml share/image-signing.asc share/firewall.nft \
             share/motd.agent share/motd.user share/project-agent.md
 
-.PHONY: all install uninstall check test e2e
+.PHONY: all install uninstall check test e2e deb
 
 all:
 	@echo "Nothing to build. Run 'make install' (PREFIX=$(PREFIX))."
@@ -43,13 +45,16 @@ uninstall:
 	rm -rf $(LIB) $(DATA) $(DOC) $(LICENSES)
 
 check:
-	for f in acage $(LIBS) tests/run tests/e2e tests/*.sh; do bash -n $$f || exit 1; done
-	shellcheck -x -s bash -S error acage $(LIBS) tests/run tests/e2e tests/*.sh
+	for f in acage $(LIBS) packaging/deb/build.sh tests/run tests/e2e tests/*.sh; do bash -n $$f || exit 1; done
+	shellcheck -x -s bash -S error acage $(LIBS) packaging/deb/build.sh tests/run tests/e2e tests/*.sh
 	if command -v mandoc >/dev/null; then mandoc -T lint -W warning acage.1; \
 	else groff -mdoc -ww -z acage.1; fi
 
 test:
 	tests/run
+
+deb:
+	packaging/deb/build.sh $(DEB_ARCH)
 
 # A real VM, start to finish (KVM, network, a few minutes; sudo for libvirt).
 # make e2e BACKEND=qemu to test the qemu backend instead.

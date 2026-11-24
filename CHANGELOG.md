@@ -25,6 +25,10 @@ change behaviour.
   localhost (for the preview), for the agent account only. Reverse forwards
   and forwards to other addresses are still refused.
 
+- A Debian/Ubuntu package: `make deb` builds `acage_VERSION_ARCH.deb` (amd64
+  or arm64, such as a Raspberry Pi), and `sudo apt install ./acage_*.deb`
+  installs acage together with QEMU, the UEFI firmware and the other host
+  tools it needs. acage itself still never installs anything.
 - `acage paste [NAME]`: copies the image on your clipboard into the agent's
   `~/pastes` and puts its path on the clipboard, so you can hand a screenshot
   to the agent, which can't read your clipboard from the cage. Made to bind to
